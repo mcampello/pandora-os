@@ -1,0 +1,18 @@
+services:
+  pandora-os:
+    build: .
+    container_name: pandora-os
+    restart: unless-stopped
+    volumes:
+      - .:/app
+      - /app/node_modules
+      - /app/.next
+    environment:
+      - NODE_ENV=development
+      - HOSTNAME=0.0.0.0
+    networks:
+      - docs-site_docs_net
+
+networks:
+  docs-site_docs_net:
+    external: true
