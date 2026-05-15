@@ -207,16 +207,6 @@ export default function ClientesPage() {
         <div className="pda-topbar-left">
           <h1 className="pda-topbar-title">Contatos</h1>
           <span className="pda-chip">{contacts.length}</span>
-          {activeCategories.slice(0, 3).map(([cat, n]) => (
-            <span key={cat} className="pda-chip" style={{ color: CATEGORY_COLOR[cat] ?? "inherit" }}>
-              {n} {CATEGORY_LABEL[cat] ?? cat}
-            </span>
-          ))}
-          {noChannelCount > 0 && (
-            <span className="pda-chip" style={{ color: "var(--pandora-ink-400)" }}>
-              {noChannelCount} sem canal
-            </span>
-          )}
         </div>
         <div className="pda-topbar-right" style={{ gap: 8 }}>
           <button className="pda-btn pda-btn-ghost" onClick={syncWhatsapp} disabled={syncing}>
