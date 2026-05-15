@@ -123,31 +123,103 @@ ssh root@76.13.174.139 "cd /root/pandora-os && git add -A && git commit -m '...'
 
 ---
 
-## Schema do Banco
-
-### Tabela \`auth.users\` (Supabase Auth)
-- Usuário admin: \`mario@campello.me\` (UUID gerado pelo Supabase)
-
-### Tabela \`connectors\`
-Armazena conexões com serviços externos (Gmail, WhatsApp, Fathom, etc.)
-
-| Coluna | Tipo | Descrição |
-|--------|------|-----------|
-| id | uuid | PK |
-| type | text | gmail / whatsapp / fathom / calcom / telegram / asaas |
-| label | text | Nome amigável (ex: "mario@campello.me") |
-| status | text | connected / disconnected / error |
-| credentials | jsonb | Tokens OAuth, API keys (criptografar no futuro) |
-| metadata | jsonb | Info extra (email, phone, webhook_url) |
-| last_sync_at | timestamptz | Última sincronização |
-| error_message | text | Mensagem de erro se status=error |
-| created_at, updated_at | timestamptz | Auto-managed |
-
-Trigger \`update_updated_at\` atualiza \`updated_at\` em cada UPDATE.
-
 ---
 
+
 ## Design System
+## Schema do Banco
+
+### `auth.users` (Supabase Auth)
+Usuário admin: `mario@campello.me`. Identity em `auth.identities` (provider: email).
+
+### `contacts` — pessoas/entidades
+Identidade unificada que liga email, WhatsApp e reuniões.
+
+| Coluna | Tipo | Notas |
+|--------|------|-------|
+| id | uuid | PK |
+| name | text | obrigatório |
+| email, phone, company, role, linkedin_url, website | text | |
+| source | text | whatsapp / email / fathom / calcom / manual / indication |
+| tags | text[] | |
+| notes | text | |
+| ai_summary | text | resumo do contato gerado por AI |
+| ai_summary_updated_at | timestamptz | |
+
+### `clients` — relacionamento comercial
+Um contact pode virar client quando há contrato.
+
+| Coluna | Tipo | Notas |
+|--------|------|-------|
+| id | uuid | |
+| contact_id | uuid | FK contacts |
+| company_name | text | nome de exibição |
+| status | text | prospect / active / paused / former |
+| monthly_fee | numeric | R$/mês |
+| dedication_hours | int | horas/mês |
+| contract_start, contract_end | date | |
+| renewal_auto | bool | default true |
+
+### `opportunities` — oportunidades detectadas
+| Coluna | Tipo | Notas |
+|--------|------|-------|
+| contact_id | uuid | FK contacts |
+| channel | text | whatsapp / email / calcom / manual / group |
+| confidence | text | very_high / high / medium / low |
+| title, description, raw_content, source_url | text | |
+| status | text | new / qualified / dismissed / converted |
+| detected_at, qualified_at | timestamptz | |
+| converted_to_client_id | uuid | FK clients |
+
+### `proposals` — propostas (versionadas)
+Múltiplas versões agrupadas por `proposal_group_id` (mesma proposta, versões diferentes).
+
+| Coluna | Tipo | Notas |
+|--------|------|-------|
+| client_id | uuid | FK clients |
+| proposal_group_id | uuid | agrupa versões |
+| version | int | |
+| title, content_md | text | markdown |
+| value | numeric | |
+| status | text | draft / sent / viewed / accepted / rejected / expired |
+| viewer_url | text | URL pública (docs.campello.me) |
+| sent_at, viewed_at, responded_at | timestamptz | |
+
+### `contracts` — contratos (versionados)
+Idem propostas. `contract_group_id` agrupa versões. Suporta diff visual entre versões.
+
+| Coluna | Tipo | Notas |
+|--------|------|-------|
+| client_id | uuid | FK clients |
+| contract_group_id, version | uuid, int | |
+| title, content_md | text | |
+| value | numeric | |
+| status | text | draft / in_review / signed / active / ended / cancelled |
+| starts_at, ends_at | date | |
+| signed_at | timestamptz | |
+| signature_provider, signature_external_id | text | clicksign / d4sign etc |
+
+### `interactions` — log unificado por contato
+Eventos vindos de qualquer canal.
+
+| Coluna | Tipo | Notas |
+|--------|------|-------|
+| contact_id | uuid | FK contacts |
+| channel | text | email / whatsapp / fathom / calcom / manual |
+| type | text | message_in / message_out / meeting / email_in / email_out / booking / note |
+| subject, summary, content | text | |
+| external_id, external_url | text | id/link na fonte |
+| metadata | jsonb | dados específicos do canal |
+| occurred_at | timestamptz | quando aconteceu |
+
+### `connectors` — conexões com serviços externos
+(ver início deste arquivo)
+
+### Triggers
+`update_updated_at()` aplicado em todas as tabelas com `updated_at`.
+
+### RLS
+Todas as tabelas com Row Level Security ativo. Política única por enquanto: `authenticated` tem full access (1 usuário admin).
 
 Tokens em \`src/app/globals.css\`. Resumo:
 
