@@ -288,6 +288,8 @@ Caddy config: \`/root/pandora-skills/deploy/docs-site/Caddyfile\`
 
 ## Notas e Decisões
 
+- **Mensagens de WhatsApp** são inseridas no Supabase pelo **N8N** na tabela vetorial `public.documents`. **Não duplicar essa ingestão**. A conexão do Pandora OS com a uazapi (`pandora.uazapi.com`) é exclusivamente para **enviar** mensagens a partir do sistema. Para ler conversas, consulte `public.documents` (e `groups`, `participants`, `group_participants`).
+
 - **N8N** existe no VPS mas o Pandora OS **não depende dele**. Todos os webhooks são API routes do próprio Next.js. N8N fica para automações pontuais quando fizer sentido.
 - **Supabase** é o único banco. Vetores do WhatsApp (uazapi) já estão lá em base separada.
 - **Telegram Bot** será o canal central de alertas — agente conversacional para Mario tirar dúvidas sobre clientes e receber notificações.
