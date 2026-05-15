@@ -35,10 +35,24 @@ export default function Sidebar() {
   return (
     <aside className={clsx("pda-side", collapsed && "collapsed")}>
       <div className="pda-brand">
-        <Image src="/pandora_ico.svg" alt="Pandora" width={28} height={28} />
+        <Image
+          src="/pandora_ico.svg"
+          alt="Pandora"
+          width={collapsed ? 36 : 28}
+          height={collapsed ? 36 : 28}
+          className="pda-brand-logo"
+          priority
+        />
         <span className="pda-brand-label">Pandora OS</span>
-        <button className="pda-collapse-btn" onClick={() => setCollapsed(!collapsed)}>
-          {collapsed ? <ChevronRight size={16} /> : <ChevronLeft size={16} />}
+        <button
+          type="button"
+          className="pda-collapse-btn pda-collapse-toggle"
+          onClick={() => setCollapsed(!collapsed)}
+          title={collapsed ? "Expandir menu" : "Recolher menu"}
+          aria-expanded={!collapsed}
+          aria-label={collapsed ? "Expandir menu lateral" : "Recolher menu lateral"}
+        >
+          {collapsed ? <ChevronRight size={18} /> : <ChevronLeft size={16} />}
         </button>
       </div>
 
@@ -79,10 +93,10 @@ export default function Sidebar() {
             <div className="pda-me-role">Pandora Tech</div>
           </div>
           <button
+            type="button"
             onClick={logout}
-            className="pda-collapse-btn"
+            className="pda-collapse-btn pda-foot-logout"
             title="Sair"
-            style={{ marginLeft: "auto" }}
           >
             <LogOut size={16} />
           </button>

@@ -94,7 +94,10 @@ html, body {
   transition: width 220ms var(--ease-soft);
   border-right: 1px solid rgba(255,255,255,0.06);
 }
-.pda-side.collapsed { width: 56px; }
+.pda-side.collapsed {
+  width: 72px;
+  padding: 16px 8px;
+}
 .pda-side::before {
   content: "";
   position: absolute;
@@ -118,8 +121,22 @@ html, body {
   white-space: nowrap;
   overflow: hidden;
 }
+.pda-brand-logo {
+  flex-shrink: 0;
+}
 .pda-brand-label { transition: opacity 150ms; }
-.pda-side.collapsed .pda-brand-label { opacity: 0; width: 0; overflow: hidden; }
+.pda-side.collapsed .pda-brand-label {
+  display: none;
+}
+
+/* Colapsado: coluna para caber marca + botão expandir (evita overflow que escondia o chevron) */
+.pda-side.collapsed .pda-brand {
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  padding: 6px 2px 14px;
+  overflow: visible;
+}
 
 .pda-collapse-btn {
   margin-left: auto;
@@ -133,7 +150,10 @@ html, body {
   transition: color 120ms;
   flex-shrink: 0;
 }
-.pda-side.collapsed .pda-collapse-btn { margin-left: 0; }
+.pda-side.collapsed .pda-brand .pda-collapse-toggle {
+  margin-left: 0;
+  color: rgba(255,255,255,0.55);
+}
 .pda-collapse-btn:hover { color: #fff; }
 
 .pda-nav-section {
@@ -176,7 +196,17 @@ html, body {
 }
 .pda-nav-item svg { width: 16px; height: 16px; stroke-width: 1.5; flex-shrink: 0; }
 .pda-nav-label { transition: opacity 150ms; }
-.pda-side.collapsed .pda-nav-label { opacity: 0; width: 0; overflow: hidden; }
+.pda-side.collapsed .pda-nav-label { display: none; }
+.pda-side.collapsed .pda-nav-item {
+  justify-content: center;
+  padding-left: 10px;
+  padding-right: 10px;
+  /* Borda esquerda do estado ativo empurra o ícone; sem ela, alinha com avatar/rodapé */
+  border-left-width: 0;
+}
+.pda-side.collapsed .pda-nav-item.active {
+  border-left-color: transparent;
+}
 
 .pda-foot {
   margin-top: auto;
@@ -186,6 +216,10 @@ html, body {
   padding: 12px 10px;
   border-top: 1px solid rgba(255,255,255,0.08);
   overflow: hidden;
+}
+.pda-foot-logout {
+  margin-left: auto;
+  flex-shrink: 0;
 }
 .pda-avatar {
   width: 32px; height: 32px; border-radius: 50%;
@@ -197,7 +231,23 @@ html, body {
 .pda-me { overflow: hidden; transition: opacity 150ms; flex: 1; min-width: 0; }
 .pda-me-name { font-size: 13px; font-weight: 600; color: #fff; white-space: nowrap; }
 .pda-me-role { font-size: 11px; color: rgba(255,255,255,0.5); white-space: nowrap; }
-.pda-side.collapsed .pda-me { opacity: 0; width: 0; }
+.pda-side.collapsed .pda-me { display: none; }
+
+.pda-side.collapsed .pda-foot {
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  padding: 12px 8px;
+  width: 100%;
+  box-sizing: border-box;
+}
+.pda-side.collapsed .pda-foot .pda-foot-logout {
+  margin-left: 0;
+}
+.pda-side.collapsed .pda-foot .pda-avatar {
+  margin-inline: auto;
+}
 
 /* ── Main area ── */
 .pda-main {

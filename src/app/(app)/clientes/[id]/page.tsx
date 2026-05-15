@@ -25,7 +25,6 @@ export default function ContatoPage() {
   const [contact, setContact]     = useState<Contact | null>(null);
   const [interactions, setInts]   = useState<Interaction[]>([]);
   const [snapshots, setSnapshots] = useState<AnalysisSnapshot[]>([]);
-  const [loadingIntel, setLI]     = useState(false);
   const [noNewData, setNoNewData] = useState(false);
   const [editing, setEditing]     = useState(false);
   const [saving, setSaving]       = useState(false);
@@ -37,8 +36,8 @@ export default function ContatoPage() {
   const [oppSuccess, setOppSuccess]   = useState(false);
   const [syncingGmail, setSyncGmail]    = useState(false);
   const [gmailResult, setGmailResult]   = useState<string | null>(null);
-  const [syncingCal, setSyncingCal]     = useState(false);
   const [calResult, setCalResult]       = useState<string | null>(null);
+  const [refreshingContact, setRefreshingContact] = useState(false);
   const [waMatches, setWaMatches]       = useState<{ name: string; phone: string; jid: string; score: number }[] | null>(null);
   const [findingWa, setFindingWa]       = useState(false);
   const [syncingWa, setSyncingWa]       = useState(false);
@@ -134,16 +133,60 @@ export default function ContatoPage() {
     setSaving(false);
   }
 
-  async function generateIntel() {
-    setLI(true);
+  async function atualizarContato() {
+    if (!contact || refreshingContact) return;
+    setRefreshingContact(true);
     setNoNewData(false);
-    const res = await fetch(`/api/contacts/${id}/intel`, { method: "POST" });
-    if (res.ok) {
-      const result: IntelResult = await res.json();
-      setNoNewData(result.no_new_data);
-      if (!result.no_new_data) await load();
+    setGmailResult(null);
+    setCalResult(null);
+    setWaResult(null);
+    try {
+      if (contact.email) {
+        const calRes = await fetch(`/api/contacts/${id}/sync-calendar`, { method: "POST" });
+        const calData = await calRes.json();
+        if (calRes.ok) {
+          setCalResult(`${calData.created} novas reuniões, ${calData.updated} atualizadas (${calData.relevant} com este contato)`);
+        } else {
+          setCalResult(`Erro: ${calData.error}`);
+        }
+
+        const gRes = await fetch(`/api/contacts/${id}/sync-gmail`, { method: "POST" });
+        const gData = await gRes.json();
+        if (gRes.ok) {
+          setGmailResult(`${gData.created} emails novos importados (${gData.synced} threads encontradas)`);
+        } else {
+          setGmailResult(`Erro: ${gData.error}`);
+        }
+      } else {
+        setCalResult(null);
+        setGmailResult(null);
+      }
+
+      if (contact.phone) {
+        const waRes = await fetch(`/api/contacts/${id}/sync-whatsapp`, { method: "POST" });
+        const waData = await waRes.json();
+        if (waRes.ok) {
+          setWaResult(
+            typeof waData.days_imported === "number"
+              ? `${waData.days_imported} novos dias importados (${waData.synced} mensagens)`
+              : (waData.message ?? "")
+          );
+        } else {
+          setWaResult(`Erro: ${waData.error}`);
+        }
+      }
+
+      await load();
+
+      const intelRes = await fetch(`/api/contacts/${id}/intel`, { method: "POST" });
+      if (intelRes.ok) {
+        const result: IntelResult = await intelRes.json();
+        setNoNewData(result.no_new_data);
+        if (!result.no_new_data) await load();
+      }
+    } finally {
+      setRefreshingContact(false);
     }
-    setLI(false);
   }
 
   async function createOpportunity() {
@@ -174,20 +217,6 @@ export default function ContatoPage() {
       setGmailResult(`Erro: ${data.error}`);
     }
     setSyncGmail(false);
-  }
-
-  async function syncCalendar() {
-    setSyncingCal(true);
-    setCalResult(null);
-    const res = await fetch(`/api/contacts/${id}/sync-calendar`, { method: "POST" });
-    const data = await res.json();
-    if (res.ok) {
-      setCalResult(`${data.created} novas reuniões, ${data.updated} atualizadas (${data.relevant} com este contato)`);
-      await load();
-    } else {
-      setCalResult(`Erro: ${data.error}`);
-    }
-    setSyncingCal(false);
   }
 
   async function findWhatsApp() {
@@ -428,7 +457,7 @@ export default function ContatoPage() {
                   </div>
                 </div>
               ) : (
-                <div style={{ display: "flex", flexDirection: "column", gap: 7 }}>
+                <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
                   {contact.company      && <InfoRow icon={<Building2 size={13} />}>{contact.company}</InfoRow>}
                   {contact.role         && <InfoRow icon={<Briefcase size={13} />}>{contact.role}</InfoRow>}
                   {contact.email && (
@@ -480,22 +509,6 @@ export default function ContatoPage() {
                 <p style={{ fontSize: 11, color: gmailResult.startsWith("Erro") ? "var(--color-danger)" : "var(--color-success)", margin: 0 }}>
                   {gmailResult}
                 </p>
-              )}
-
-              {/* Sync de agenda */}
-              {contact.email && (
-                <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-                  <CalendarDays size={13} style={{ color: "var(--pandora-ink-400)", flexShrink: 0 }} />
-                  <span style={{ fontSize: 12, color: "var(--pandora-ink-500)", flex: 1 }}>Reuniões do calendário</span>
-                  <button
-                    onClick={syncCalendar}
-                    disabled={syncingCal}
-                    title="Sincronizar reuniões do Google Calendar"
-                    style={{ background: "none", border: "none", cursor: "pointer", color: "var(--pandora-ink-400)", padding: 2, display: "flex", flexShrink: 0 }}
-                  >
-                    <RefreshCw size={12} style={syncingCal ? { animation: "spin 1s linear infinite" } : {}} />
-                  </button>
-                </div>
               )}
               {calResult && (
                 <p style={{ fontSize: 11, color: calResult.startsWith("Erro") ? "var(--color-danger)" : "var(--color-success)", margin: 0 }}>
@@ -596,7 +609,7 @@ export default function ContatoPage() {
                     {latest?.sales_strategy ? (
                       <p style={{ fontSize: 13, color: "var(--pandora-violet-900)", lineHeight: 1.6, margin: 0 }}>{latest.sales_strategy}</p>
                     ) : (
-                      <p style={{ fontSize: 12, color: "var(--pandora-ink-400)", margin: 0 }}>Gere uma análise para ver este campo.</p>
+                      <p style={{ fontSize: 12, color: "var(--pandora-ink-400)", margin: 0 }}>Use Atualizar contato para gerar uma análise e ver este campo.</p>
                     )}
                     {latest?.created_at && (
                       <p style={{ fontSize: 11, color: "var(--pandora-ink-400)", marginTop: 8, fontFamily: "var(--font-mono)" }}>
@@ -607,67 +620,80 @@ export default function ContatoPage() {
                 )}
               </div>
             )}
-            {/* Adicionar atualização */}
-            {!updateForm ? (
-              <button
-                onClick={() => setUpdateForm(true)}
-                className="pda-btn pda-btn-ghost"
-                style={{ width: "100%", justifyContent: "center", gap: 6 }}
-              >
-                <MessageSquarePlus size={14} /> Adicionar atualização
-              </button>
-            ) : (
-              <div className="pda-card" style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-                <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                  <MessageSquarePlus size={13} color="var(--pandora-violet-500)" />
-                  <span className="pda-eyebrow">Nova atualização</span>
-                  <button onClick={() => setUpdateForm(false)} style={{ marginLeft: "auto", background: "none", border: "none", cursor: "pointer", color: "var(--pandora-ink-400)", display: "flex" }}>
-                    <X size={14} />
-                  </button>
-                </div>
-                <div style={{ display: "flex", gap: 6 }}>
-                  <select value={update.type} onChange={(e) => setUpdate((u) => ({ ...u, type: e.target.value }))} style={{ ...inputStyle, flex: 1 }}>
-                    {UPDATE_TYPES.map((t) => <option key={t.value} value={t.value}>{t.label}</option>)}
-                  </select>
-                </div>
-                <input
-                  type="datetime-local"
-                  value={update.occurred_at}
-                  onChange={(e) => setUpdate((u) => ({ ...u, occurred_at: e.target.value }))}
-                  style={inputStyle}
-                />
-                <input
-                  value={update.subject}
-                  onChange={(e) => setUpdate((u) => ({ ...u, subject: e.target.value }))}
-                  placeholder="Título… ex: Ligação sobre proposta"
-                  style={inputStyle}
-                  autoFocus
-                />
-                <textarea
-                  value={update.content}
-                  onChange={(e) => setUpdate((u) => ({ ...u, content: e.target.value }))}
-                  placeholder="Detalhes (opcional)…"
-                  style={{ ...inputStyle, height: 68, resize: "vertical" }}
-                />
-                <button onClick={addUpdate} disabled={updateSaving || !update.subject.trim()} className="pda-btn" style={{ width: "100%", justifyContent: "center" }}>
-                  {updateSaving ? "Salvando…" : "Salvar"}
-                </button>
-              </div>
-            )}
           </div>
 
           {/* ── COLUNA DIREITA ── */}
           <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
+
+            <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+              <div style={{ display: "flex", alignItems: "stretch", gap: 10 }}>
+                <button
+                  type="button"
+                  onClick={() => setUpdateForm(true)}
+                  disabled={refreshingContact || updateForm}
+                  className="pda-btn pda-btn-ghost"
+                  style={{ flex: 1, justifyContent: "center", gap: 6 }}
+                >
+                  <MessageSquarePlus size={14} /> Nova atualização
+                </button>
+                <button
+                  type="button"
+                  onClick={() => atualizarContato()}
+                  disabled={refreshingContact || !contact}
+                  title="Importa reuniões do calendário, atualiza Gmail e WhatsApp e gera um novo resumo"
+                  className="pda-btn pda-btn-ghost"
+                  style={{ flex: 1, justifyContent: "center", gap: 6 }}
+                >
+                  <RefreshCw size={14} style={refreshingContact ? { animation: "spin 1s linear infinite" } : undefined} />
+                  {refreshingContact ? "Atualizando…" : "Atualizar contato"}
+                </button>
+              </div>
+
+              {updateForm && (
+                <div className="pda-card" style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+                  <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                    <MessageSquarePlus size={13} color="var(--pandora-violet-500)" />
+                    <span className="pda-eyebrow">Nova atualização</span>
+                    <button type="button" onClick={() => setUpdateForm(false)} style={{ marginLeft: "auto", background: "none", border: "none", cursor: "pointer", color: "var(--pandora-ink-400)", display: "flex" }}>
+                      <X size={14} />
+                    </button>
+                  </div>
+                  <div style={{ display: "flex", gap: 6 }}>
+                    <select value={update.type} onChange={(e) => setUpdate((u) => ({ ...u, type: e.target.value }))} style={{ ...inputStyle, flex: 1 }}>
+                      {UPDATE_TYPES.map((t) => <option key={t.value} value={t.value}>{t.label}</option>)}
+                    </select>
+                  </div>
+                  <input
+                    type="datetime-local"
+                    value={update.occurred_at}
+                    onChange={(e) => setUpdate((u) => ({ ...u, occurred_at: e.target.value }))}
+                    style={inputStyle}
+                  />
+                  <input
+                    value={update.subject}
+                    onChange={(e) => setUpdate((u) => ({ ...u, subject: e.target.value }))}
+                    placeholder="Título… ex: Ligação sobre proposta"
+                    style={inputStyle}
+                    autoFocus
+                  />
+                  <textarea
+                    value={update.content}
+                    onChange={(e) => setUpdate((u) => ({ ...u, content: e.target.value }))}
+                    placeholder="Detalhes (opcional)…"
+                    style={{ ...inputStyle, height: 68, resize: "vertical" }}
+                  />
+                  <button type="button" onClick={addUpdate} disabled={updateSaving || !update.subject.trim()} className="pda-btn" style={{ width: "100%", justifyContent: "center" }}>
+                    {updateSaving ? "Salvando…" : "Salvar"}
+                  </button>
+                </div>
+              )}
+            </div>
 
             {/* Quem é */}
             <div className="pda-card">
               <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 12 }}>
                 <Sparkles size={14} color="var(--pandora-violet-500)" />
                 <span className="pda-eyebrow">Quem é</span>
-                <button onClick={generateIntel} disabled={loadingIntel} className="pda-btn pda-btn-ghost" style={{ marginLeft: "auto", padding: "4px 10px", fontSize: 11 }}>
-                  <RefreshCw size={11} style={loadingIntel ? { animation: "spin 1s linear infinite" } : {}} />
-                  {loadingIntel ? "Analisando…" : "Nova análise"}
-                </button>
               </div>
               {noNewData && (
                 <p style={{ fontSize: 12, color: "var(--pandora-ink-400)", margin: "0 0 10px", padding: "6px 10px", background: "var(--pandora-ink-50)", borderRadius: 6 }}>
@@ -687,7 +713,7 @@ export default function ContatoPage() {
                   </p>
                 </>
               ) : (
-                <p style={{ fontSize: 13, color: "var(--pandora-ink-400)", margin: 0 }}>Clique em Nova análise para gerar um resumo do contato baseado nas conversas.</p>
+                <p style={{ fontSize: 13, color: "var(--pandora-ink-400)", margin: 0 }}>Clique em <strong>Atualizar contato</strong> para gerar um resumo com base nas conversas.</p>
               )}
             </div>
 
@@ -749,11 +775,11 @@ export default function ContatoPage() {
               </div>
             )}
 
-            {timeline.length === 0 && !loadingIntel && (
+            {timeline.length === 0 && !refreshingContact && (
               <div className="pda-empty">
                 <History />
                 <div className="pda-empty-title">Nenhum histórico ainda</div>
-                <div className="pda-empty-desc">Clique em <strong>Nova análise</strong> para registrar o primeiro ponto na timeline.</div>
+                <div className="pda-empty-desc">Clique em <strong>Atualizar contato</strong> para registrar o primeiro ponto na timeline.</div>
               </div>
             )}
           </div>
@@ -768,7 +794,7 @@ export default function ContatoPage() {
 
 function InfoRow({ icon, children }: { icon: React.ReactNode; children: React.ReactNode }) {
   return (
-    <div style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 13, color: "var(--pandora-ink-600)" }}>
+    <div style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 10, color: "var(--pandora-ink-600)" }}>
       <span style={{ color: "var(--pandora-ink-400)", display: "flex" }}>{icon}</span>
       <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{children}</span>
     </div>
@@ -895,11 +921,11 @@ function InteractionEntry({ item }: { item: Interaction }) {
         )}
 
         {fathomSum ? (
-          <p style={{ fontSize: 12, color: "var(--pandora-ink-600)", margin: 0, lineHeight: 1.5, fontStyle: "italic" }}>
+          <p style={{ fontSize: 10, color: "var(--pandora-ink-600)", margin: 0, lineHeight: 1.5, fontStyle: "italic" }}>
             {fathomSum}
           </p>
         ) : (item.summary || item.content) ? (
-          <p style={{ fontSize: 12, color: "var(--pandora-ink-600)", margin: 0, lineHeight: 1.4, overflow: "hidden", textOverflow: "ellipsis", display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical" }}>
+          <p style={{ fontSize: 10, color: "var(--pandora-ink-600)", margin: 0, lineHeight: 1.4, overflow: "hidden", textOverflow: "ellipsis", display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical" }}>
             {item.summary || item.content}
           </p>
         ) : null}
