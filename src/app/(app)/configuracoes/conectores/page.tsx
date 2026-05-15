@@ -22,10 +22,11 @@ type CatalogItem = {
 };
 
 const CATALOG: CatalogItem[] = [
-  { type: "gmail",    name: "Gmail",    description: "Monitora emails e detecta oportunidades", icon: Mail,          color: "#EA4335", placeholder: "ex: mario@campello.me",      mode: "oauth", oauthInitUrl: "/api/connectors/gmail/init" },
+  { type: "gmail",      name: "Gmail",            description: "Busca emails por contato e detecta oportunidades", icon: Mail,     color: "#EA4335", placeholder: "ex: mario@campello.me",  mode: "oauth", oauthInitUrl: "/api/connectors/gmail/init" },
+  { type: "gcalendar", name: "Google Calendar",  description: "Agenda de reuniões com contatos",                   icon: Calendar, color: "#0070F3", placeholder: "ex: mario@campello.me",  mode: "oauth", oauthInitUrl: "/api/connectors/gcalendar/init" },
   { type: "whatsapp", name: "WhatsApp", description: "Envio de mensagens (recebimento via N8N)", icon: MessageCircle, color: "#25D366", placeholder: "Cole aqui o token da instância", mode: "token", inputLabel: "Token da instância uazapi" },
-  { type: "fathom",   name: "Fathom",   description: "Importa transcrições e resumos de reuniões", icon: Video,       color: "#7C3AED", placeholder: "ex: Conta principal",        mode: "manual" },
-  { type: "calcom",   name: "Cal.com",  description: "Detecta agendamentos como oportunidades",  icon: Calendar,      color: "#0070F3", placeholder: "ex: mario@campello.me",      mode: "manual" },
+  { type: "fathom",   name: "Fathom",   description: "Importa transcrições e resumos de reuniões", icon: Video,       color: "#7C3AED", placeholder: "fv_live_...", mode: "token", inputLabel: "API Key (fathom.video/app/api-keys)" },
+  { type: "calcom",   name: "Cal.com",  description: "Importa agendamentos e cria contatos automaticamente", icon: Calendar, color: "#0070F3", placeholder: "API Key do Cal.com", mode: "token", inputLabel: "API Key (cal_live_...)" },
   { type: "telegram", name: "Telegram", description: "Bot para alertas e interações do agente",  icon: Send,          color: "#2AABEE", placeholder: "ex: @pandora_bot",           mode: "manual" },
   { type: "asaas",    name: "Asaas",    description: "NFs, cobranças e financeiro",               icon: DollarSign,   color: "#00B09B", placeholder: "ex: Pandora Tech",           mode: "manual" },
 ];
@@ -49,6 +50,28 @@ function ConectoresInner() {
   const [input, setInput]           = useState("");
   const [saving, setSaving]         = useState(false);
   const [msg, setMsg]               = useState<{ kind: "ok" | "err"; text: string } | null>(null);
+  const [syncing, setSyncing]       = useState<ConnectorType | null>(null);
+
+  const SYNC_ROUTES: Partial<Record<ConnectorType, string>> = {
+    calcom: "/api/connectors/calcom/sync",
+    fathom: "/api/connectors/fathom/sync",
+  };
+
+  async function syncConnector(type: ConnectorType) {
+    const route = SYNC_ROUTES[type];
+    if (!route) return;
+    setSyncing(type);
+    setMsg(null);
+    const res = await fetch(route, { method: "POST" });
+    const data = await res.json();
+    if (res.ok) {
+      setMsg({ kind: "ok", text: `Sincronizado: ${data.contacts_created} contatos criados, ${data.interactions_created} reuniões importadas` });
+    } else {
+      setMsg({ kind: "err", text: data.error || "Falha na sincronização" });
+    }
+    setSyncing(null);
+    await load();
+  }
   const supabase = supabaseBrowser();
   const params   = useSearchParams();
   const connected = params.get("connected");
@@ -150,6 +173,16 @@ function ConectoresInner() {
                         <StatusDot status={c.status} />
                         <span style={{ flex: 1, fontSize: 13, color: "var(--pandora-violet-800)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{c.label}</span>
                         <StatusLabel status={c.status} />
+                        {SYNC_ROUTES[type] && c.status === "connected" && (
+                          <button
+                            onClick={() => syncConnector(type)}
+                            disabled={syncing === type}
+                            style={{ background: "none", border: "none", cursor: "pointer", color: "var(--pandora-violet-500)", padding: 2, display: "flex" }}
+                            title="Sincronizar histórico"
+                          >
+                            <RefreshCw size={13} style={syncing === type ? { animation: "spin 1s linear infinite" } : {}} />
+                          </button>
+                        )}
                         <button onClick={() => remove(c.id)} style={{ background: "none", border: "none", cursor: "pointer", color: "var(--pandora-ink-400)", padding: 2, display: "flex" }} title="Remover">
                           <Unplug size={13} />
                         </button>
@@ -213,6 +246,7 @@ function ConectoresInner() {
 
         {loading && <p style={{ fontSize: 13, color: "var(--pandora-ink-400)", marginTop: 24 }}>Carregando…</p>}
       </div>
+      <style>{`@keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }`}</style>
     </>
   );
 }
