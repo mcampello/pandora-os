@@ -32,6 +32,7 @@ PRD completo: `/Users/mcampello/Library/CloudStorage/GoogleDrive-mario@campello.
 | Reverse proxy | Caddy 2 (HTTPS automático via Let's Encrypt) |
 | Hospedagem | VPS Ubuntu 24.04 |
 | Versionamento | Git + GitHub |
+| AI (LLMs)      | OpenRouter — modelo default: `anthropic/claude-sonnet-4.5` (helper em `src/lib/ai.ts`) |
 
 ---
 
