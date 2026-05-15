@@ -3,7 +3,7 @@
 // ────────────────────────────────────────────
 
 // Conectores
-export type ConnectorType = 'gmail' | 'whatsapp' | 'fathom' | 'calcom' | 'telegram' | 'asaas';
+export type ConnectorType = 'gmail' | 'gcalendar' | 'whatsapp' | 'fathom' | 'calcom' | 'telegram' | 'asaas';
 export type ConnectorStatus = 'connected' | 'disconnected' | 'error';
 
 export interface Connector {
@@ -19,6 +19,16 @@ export interface Connector {
   updated_at: string;
 }
 
+// Categoria do contato — define o "ângulo" de análise da AI
+export type ContactCategory =
+  | 'prospect'
+  | 'cliente'
+  | 'fornecedor'
+  | 'desenvolvedor'
+  | 'parceiro'
+  | 'casual'
+  | 'desconhecido';
+
 // Contatos
 export interface Contact {
   id: string;
@@ -30,12 +40,21 @@ export interface Contact {
   linkedin_url?: string;
   website?: string;
   source?: 'whatsapp' | 'email' | 'fathom' | 'calcom' | 'manual' | 'indication';
+  category?: ContactCategory;
   tags?: string[];
   notes?: string;
   ai_summary?: string;
   ai_summary_updated_at?: string;
   created_at: string;
   updated_at: string;
+}
+
+// Contact enriquecido com stats de interações (view contacts_with_stats)
+export interface ContactWithStats extends Contact {
+  last_interaction_at?: string;
+  last_interaction_channel?: string;
+  last_interaction_subject?: string;
+  interaction_count: number;
 }
 
 // Clientes
@@ -119,6 +138,21 @@ export interface Contract {
   signature_external_id?: string;
   created_at: string;
   updated_at: string;
+}
+
+// Snapshots de análise AI por contato
+export interface AnalysisSnapshot {
+  id: string;
+  contact_id: string;
+  who?: string;
+  status?: string;
+  topics?: string[];
+  sales_strategy?: string;
+  next_steps?: string[];
+  last_doc_id?: number;
+  message_count: number;
+  model?: string;
+  created_at: string;
 }
 
 // Interações (log unificado por contato)

@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { supabaseServer } from "@/lib/supabase-server";
 
 // Sincroniza contatos a partir de mensagens 1:1 (não-grupo) na tabela documents.
-// Para cada chatId único, identifica o "outro lado" (não o owner) e cria contato.
+// Para cada chatId único, identifica o "outro lado" (não o owner) e cria contato + client prospect.
 
 interface DocumentRow {
   metadata: {
@@ -18,11 +18,9 @@ export async function POST() {
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return NextResponse.json({ error: "unauthorized" }, { status: 401 });
 
-  // Estrutura: chatId -> { senderTallies, ownerPhone }
   const chats = new Map<string, {
     phone: string;
-    ownerPhone: string;
-    counts: Map<string, number>;  // senderName -> count
+    counts: Map<string, number>;
     lastDate: string;
   }>();
 
@@ -42,14 +40,13 @@ export async function POST() {
       const chatId = row.metadata?.chatId;
       const name   = (row.metadata?.senderName ?? "").trim();
       const date   = row.metadata?.date ?? "";
-      const owner  = row.metadata?.owner ?? "";
       if (!chatId) continue;
-      const phone = chatId.replace(/@.*$/, "").replace(/\\D/g, "");
+      const phone = chatId.replace(/@.*$/, "").replace(/\D/g, "");
       if (!phone || phone.length < 8) continue;
 
       let entry = chats.get(chatId);
       if (!entry) {
-        entry = { phone, ownerPhone: owner, counts: new Map(), lastDate: "" };
+        entry = { phone, counts: new Map(), lastDate: "" };
         chats.set(chatId, entry);
       }
       if (name) entry.counts.set(name, (entry.counts.get(name) ?? 0) + 1);
@@ -60,62 +57,66 @@ export async function POST() {
     offset += pageSize;
   }
 
-  // Identifica nomes "do Mario" (owner) para excluir
-  const ownerNames = new Set<string>();
-  for (const { ownerPhone, counts } of chats.values()) {
-    if (!ownerPhone) continue;
-    // O nome "do owner" provavelmente aparece em MUITOS chats. Coleta candidatos.
-  }
-  // Conta em quantos chats cada nome aparece
+  // Detecta nomes do owner: aparecem em >50% dos chats
+  const ownerNames = new Set<string>(["Mario Campello", "Campello"]);
   const presenceByName = new Map<string, number>();
   for (const { counts } of chats.values()) {
     for (const n of counts.keys()) {
       presenceByName.set(n, (presenceByName.get(n) ?? 0) + 1);
     }
   }
-  // Nome que aparece em >50% dos chats provavelmente é o owner (Mario)
   const totalChats = chats.size;
   for (const [name, presence] of presenceByName) {
     if (totalChats > 1 && presence / totalChats > 0.5) ownerNames.add(name);
   }
-  // Fallback: também excluímos hardcoded
-  ownerNames.add("Mario Campello");
 
   let created = 0;
   let updated = 0;
+  const errors: string[] = [];
   const summary: Array<{ phone: string; name: string; messages: number; status: "created" | "updated" | "skipped" }> = [];
 
   for (const [, info] of chats) {
-    // Escolhe o nome do "outro lado": maior contador entre nomes que NÃO são do owner
     let bestName = "";
     let bestCount = 0;
     let totalMsgs = 0;
     for (const [name, count] of info.counts) {
       totalMsgs += count;
       if (ownerNames.has(name)) continue;
-      if (count > bestCount) {
-        bestName = name;
-        bestCount = count;
-      }
+      if (count > bestCount) { bestName = name; bestCount = count; }
     }
-    if (!bestName) bestName = info.phone; // fallback
+    if (!bestName) continue; // skip chats onde só o owner falou
 
-    const { data: existing } = await supabase
+    const { data: existing, error: selectErr } = await supabase
       .from("contacts").select("id, name").eq("phone", info.phone).maybeSingle();
 
+    if (selectErr) { errors.push(`select ${info.phone}: ${selectErr.message}`); continue; }
+
     if (existing) {
-      // Atualiza nome se for igual ao phone (placeholder) ou estiver vazio
       if (!existing.name || existing.name === info.phone) {
-        await supabase.from("contacts").update({ name: bestName }).eq("id", existing.id);
-        updated++;
+        const { error: updErr } = await supabase.from("contacts").update({ name: bestName }).eq("id", existing.id);
+        if (updErr) errors.push(`update ${info.phone}: ${updErr.message}`);
+        else updated++;
         summary.push({ phone: info.phone, name: bestName, messages: totalMsgs, status: "updated" });
       } else {
         summary.push({ phone: info.phone, name: existing.name, messages: totalMsgs, status: "skipped" });
       }
     } else {
-      await supabase.from("contacts").insert({
-        name: bestName, phone: info.phone, source: "whatsapp",
+      const { data: newContact, error: insErr } = await supabase
+        .from("contacts")
+        .insert({ name: bestName, phone: info.phone, source: "whatsapp" })
+        .select("id")
+        .single();
+
+      if (insErr) { errors.push(`insert contact ${info.phone}: ${insErr.message}`); continue; }
+
+      // Cria client prospect para validação
+      const { error: clientErr } = await supabase.from("clients").insert({
+        contact_id: newContact.id,
+        company_name: bestName,
+        status: "prospect",
       });
+      if (clientErr) errors.push(`insert client ${info.phone}: ${clientErr.message}`);
+
       created++;
       summary.push({ phone: info.phone, name: bestName, messages: totalMsgs, status: "created" });
     }
@@ -125,6 +126,7 @@ export async function POST() {
     ok: true,
     total_chats: chats.size,
     created, updated,
+    errors,
     owner_names_excluded: Array.from(ownerNames),
     summary,
   });

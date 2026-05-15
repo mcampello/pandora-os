@@ -13,7 +13,7 @@ import { supabaseBrowser } from "@/lib/supabase-browser";
 
 const navItems = [
   { href: "/",              label: "Dashboard",     icon: LayoutDashboard },
-  { href: "/clientes",      label: "Clientes",      icon: Users },
+  { href: "/clientes",      label: "Contatos",      icon: Users },
   { href: "/oportunidades", label: "Oportunidades", icon: Zap },
   { href: "/propostas",     label: "Propostas",     icon: FileText },
   { href: "/contratos",     label: "Contratos",     icon: ScrollText },
