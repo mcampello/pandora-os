@@ -42,7 +42,7 @@ export default function ContatoPage() {
       const { data: docs } = await supabase
         .from("documents")
         .select("content, metadata")
-        .filter("metadata->>chatid", "ilike", `%${phoneDigits}%`)
+        .filter("metadata->>chatId", "ilike", `%${phoneDigits}%`)
         .order("id", { ascending: false })
         .limit(30);
       setWa((docs as { content: string; metadata: Record<string, unknown> }[]) ?? []);
