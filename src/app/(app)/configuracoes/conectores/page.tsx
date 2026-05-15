@@ -1,6 +1,7 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, Suspense } from "react";
+import { useSearchParams } from "next/navigation";
 import { supabaseBrowser } from "@/lib/supabase-browser";
 import type { Connector, ConnectorType } from "@/lib/types";
 import {
@@ -8,15 +9,19 @@ import {
   Plus, RefreshCw, Unplug, CheckCircle2, AlertCircle, Circle
 } from "lucide-react";
 
-const CATALOG: {
+type CatalogItem = {
   type: ConnectorType;
   name: string;
   description: string;
   icon: React.ElementType;
   color: string;
   placeholder: string;
-}[] = [
-  { type: "gmail",    name: "Gmail",    description: "Monitora emails e detecta oportunidades", icon: Mail,          color: "#EA4335", placeholder: "ex: mario@campello.me" },
+  oauth?: boolean;
+  oauthInitUrl?: string;
+};
+
+const CATALOG: CatalogItem[] = [
+  { type: "gmail",    name: "Gmail",    description: "Monitora emails e detecta oportunidades", icon: Mail,          color: "#EA4335", placeholder: "ex: mario@campello.me", oauth: true, oauthInitUrl: "/api/connectors/gmail/init" },
   { type: "whatsapp", name: "WhatsApp", description: "Lê conversas via uazapi.dev",              icon: MessageCircle, color: "#25D366", placeholder: "ex: +55 11 99999-9999" },
   { type: "fathom",   name: "Fathom",   description: "Importa transcrições e resumos de reuniões", icon: Video,       color: "#7C3AED", placeholder: "ex: Conta principal" },
   { type: "calcom",   name: "Cal.com",  description: "Detecta agendamentos como oportunidades",  icon: Calendar,      color: "#0070F3", placeholder: "ex: mario@campello.me" },
@@ -36,13 +41,16 @@ function StatusLabel({ status }: { status: Connector["status"] }) {
   return <span style={{ fontSize: 12, color }}>{map[status]}</span>;
 }
 
-export default function ConectoresPage() {
+function ConectoresInner() {
   const [connectors, setConnectors] = useState<Connector[]>([]);
   const [loading, setLoading]       = useState(true);
   const [adding, setAdding]         = useState<ConnectorType | null>(null);
   const [label, setLabel]           = useState("");
   const [saving, setSaving]         = useState(false);
   const supabase = supabaseBrowser();
+  const params   = useSearchParams();
+  const connected = params.get("connected");
+  const error     = params.get("error");
 
   async function load() {
     setLoading(true);
@@ -86,12 +94,23 @@ export default function ConectoresPage() {
       </header>
 
       <div className="pda-content">
-        <p style={{ fontSize: 14, color: "var(--pandora-ink-500)", marginBottom: 32, maxWidth: 600 }}>
+        <p style={{ fontSize: 14, color: "var(--pandora-ink-500)", marginBottom: 16, maxWidth: 600 }}>
           Conecte suas contas para que o Pandora OS monitore emails, reuniões, WhatsApp e muito mais.
         </p>
 
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(300px, 1fr))", gap: 16 }}>
-          {CATALOG.map(({ type, name, description, icon: Icon, color, placeholder }) => {
+        {connected && (
+          <div style={{ background: "rgba(34,197,94,0.08)", border: "1px solid rgba(34,197,94,0.3)", borderRadius: "var(--radius-md)", padding: "10px 14px", marginBottom: 16, fontSize: 13, color: "var(--color-success)" }}>
+            ✓ Conta <strong>{connected}</strong> conectada com sucesso
+          </div>
+        )}
+        {error && (
+          <div style={{ background: "rgba(239,68,68,0.08)", border: "1px solid rgba(239,68,68,0.3)", borderRadius: "var(--radius-md)", padding: "10px 14px", marginBottom: 16, fontSize: 13, color: "var(--color-danger)" }}>
+            Falha na conexão: {error}
+          </div>
+        )}
+
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(300px, 1fr))", gap: 16, marginTop: 16 }}>
+          {CATALOG.map(({ type, name, description, icon: Icon, color, placeholder, oauth, oauthInitUrl }) => {
             const instances = connectors.filter((c) => c.type === type);
             const isAdding  = adding === type;
 
@@ -140,7 +159,12 @@ export default function ConectoresPage() {
                   </div>
                 )}
 
-                {isAdding ? (
+                {oauth ? (
+                  <a href={oauthInitUrl} className="pda-btn" style={{ display: "flex", alignItems: "center", gap: 6, justifyContent: "center" }}>
+                    <Plus size={14} />
+                    Conectar conta Google
+                  </a>
+                ) : isAdding ? (
                   <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
                     <input
                       autoFocus
@@ -183,10 +207,16 @@ export default function ConectoresPage() {
           })}
         </div>
 
-        {loading && (
-          <p style={{ fontSize: 13, color: "var(--pandora-ink-400)", marginTop: 24 }}>Carregando…</p>
-        )}
+        {loading && <p style={{ fontSize: 13, color: "var(--pandora-ink-400)", marginTop: 24 }}>Carregando…</p>}
       </div>
     </>
+  );
+}
+
+export default function ConectoresPage() {
+  return (
+    <Suspense fallback={null}>
+      <ConectoresInner />
+    </Suspense>
   );
 }
