@@ -30,7 +30,7 @@ export async function POST(_req: NextRequest, { params }: { params: Promise<{ id
     const phoneDigits = contact.phone.replace(/\\D/g, "");
     const { data: docs } = await supabase
       .from("documents").select("content, metadata")
-      .filter("metadata->>chatid", "ilike", `%${phoneDigits}%`)
+      .filter("metadata->>chatId", "ilike", `%${phoneDigits}%`)
       .order("id", { ascending: false }).limit(40);
     waMessages = docs ?? [];
   }
