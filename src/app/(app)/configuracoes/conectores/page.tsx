@@ -1,7 +1,8 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { supabase, Connector, ConnectorType } from "@/lib/supabase";
+import { supabaseBrowser } from "@/lib/supabase-browser";
+import type { Connector, ConnectorType } from "@/lib/types";
 import {
   Mail, MessageCircle, Video, Calendar, Send, DollarSign,
   Plus, RefreshCw, Unplug, CheckCircle2, AlertCircle, Circle
@@ -24,8 +25,8 @@ const CATALOG: {
 ];
 
 function StatusDot({ status }: { status: Connector["status"] }) {
-  if (status === "connected")    return <CheckCircle2 size={14} color="var(--color-success)" />;
-  if (status === "error")        return <AlertCircle  size={14} color="var(--color-danger)"  />;
+  if (status === "connected") return <CheckCircle2 size={14} color="var(--color-success)" />;
+  if (status === "error")     return <AlertCircle  size={14} color="var(--color-danger)" />;
   return <Circle size={14} color="var(--pandora-ink-400)" />;
 }
 
@@ -41,6 +42,7 @@ export default function ConectoresPage() {
   const [adding, setAdding]         = useState<ConnectorType | null>(null);
   const [label, setLabel]           = useState("");
   const [saving, setSaving]         = useState(false);
+  const supabase = supabaseBrowser();
 
   async function load() {
     setLoading(true);
@@ -71,8 +73,6 @@ export default function ConectoresPage() {
     await load();
   }
 
-  const connectedTypes = connectors.map((c) => c.type);
-
   return (
     <>
       <header className="pda-topbar">
@@ -97,7 +97,6 @@ export default function ConectoresPage() {
 
             return (
               <div key={type} className="pda-card" style={{ display: "flex", flexDirection: "column", gap: 16 }}>
-                {/* Header */}
                 <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
                   <div style={{
                     width: 40, height: 40, borderRadius: "var(--radius-md)",
@@ -115,7 +114,6 @@ export default function ConectoresPage() {
                   </div>
                 </div>
 
-                {/* Instâncias conectadas */}
                 {instances.length > 0 && (
                   <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
                     {instances.map((c) => (
@@ -142,7 +140,6 @@ export default function ConectoresPage() {
                   </div>
                 )}
 
-                {/* Form de adição */}
                 {isAdding ? (
                   <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
                     <input
