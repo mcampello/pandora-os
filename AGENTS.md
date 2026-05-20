@@ -61,7 +61,7 @@ PRD completo: `/Users/mcampello/Library/CloudStorage/GoogleDrive-mario@campello.
 
 ### Login no app
 - Email: \`mario@campello.me\`
-- Senha: \`***REMOVED***\` (temporária — trocar)
+- Senha: definida no Supabase Auth (não commitar aqui)
 
 ---
 
