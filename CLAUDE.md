@@ -119,7 +119,8 @@ bash /root/pandora-os/scripts/deploy-dev.sh   # dev  → dev.campello.pro
         │   ├── oportunidades/ # Kanban + lista
         │   ├── propostas/    # Lista + [id] detalhe + novo
         │   ├── contratos/    # Lista + [id] detalhe + novo
-        │   ├── operacao/     # Health score + entregas + horas
+        │   ├── operacao/     # Índice de clientes ativos
+│   │   └── [id]/     # Operação full-screen: kanban iniciativas + reuniões
         │   └── configuracoes/conectores/
         ├── api/
         │   ├── ai/improve/           # Melhoria de texto via AI
@@ -130,6 +131,8 @@ bash /root/pandora-os/scripts/deploy-dev.sh   # dev  → dev.campello.pro
         │   ├── contacts/[id]/        # CRUD + suggestions + sync-whatsapp
         │   ├── contracts/[id]/agent/ # CRUD + agente AI
         │   ├── deliverables/[id]/    # CRUD + suggest
+│   ├── initiatives/[id]/     # CRUD iniciativas
+│   ├── initiative-tasks/[id]/ # CRUD tarefas de iniciativas
         │   ├── hours/[id]/           # CRUD horas
         │   ├── interactions/         # Log de interações
         │   ├── meetings/             # Reuniões (Fathom)
@@ -298,6 +301,30 @@ Múltiplas versões agrupadas por `proposal_group_id`.
 | signed_at | timestamptz | |
 | signature_provider, signature_external_id | text | clicksign / d4sign etc |
 
+### `initiatives` — iniciativas por cliente (roadmap operacional)
+
+| Coluna | Tipo | Notas |
+|--------|------|-------|
+| id | uuid | PK |
+| client_id | uuid | FK clients (cascade) |
+| title | text | obrigatório |
+| description | text | |
+| status | text | backlog / active / paused / done |
+| priority | int | 1–5, opcional |
+| start_date, due_date | date | |
+
+### `initiative_tasks` — tarefas dentro de uma iniciativa
+
+| Coluna | Tipo | Notas |
+|--------|------|-------|
+| id | uuid | PK |
+| initiative_id | uuid | FK initiatives (cascade) |
+| title | text | obrigatório |
+| status | text | todo / in_progress / blocked / done |
+| assignee | text | responsável (texto livre) |
+| due_date | date | |
+| sort_order | int | ordenação dentro da iniciativa |
+
 ### `deliverables` — entregas mensais por cliente
 
 | Coluna | Tipo | Notas |
@@ -355,7 +382,8 @@ Todas as tabelas com Row Level Security ativo. Política: `authenticated` tem fu
 - [x] Tela de Oportunidades (kanban + lista, API GET/PATCH)
 - [x] Propostas (lista + drawer + viewer público /view/p/[id] + geração + import PDF)
 - [x] Contratos (lista + drawer + viewer público /view/c/[id] + agente AI)
-- [x] Módulo Operação (/operacao) — health score, entregas, horas por cliente
+- [x] Módulo Operação (/operacao) — índice de clientes ativos com navegação para /operacao/[id]
+- [x] Operação por cliente (/operacao/[id]) — kanban de iniciativas (backlog/active/paused/done) com tarefas ricas (todo/in_progress/blocked/done), painel de reuniões/transcrições, health score, fee e horas no header
 - [x] Portal do cliente (/portal/[slug])
 - [ ] Gmail OAuth real
 - [ ] Telegram Bot

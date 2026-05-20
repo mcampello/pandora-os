@@ -225,6 +225,36 @@ export interface HoursEntry {
   updated_at: string;
 }
 
+// Operação — iniciativas e tarefas
+export type InitiativeStatus = 'backlog' | 'active' | 'paused' | 'done';
+export type InitiativeTaskStatus = 'todo' | 'in_progress' | 'blocked' | 'done';
+
+export interface Initiative {
+  id: string;
+  client_id: string;
+  title: string;
+  description?: string;
+  status: InitiativeStatus;
+  priority?: number;
+  start_date?: string;
+  due_date?: string;
+  created_at: string;
+  updated_at: string;
+  tasks?: InitiativeTask[];
+}
+
+export interface InitiativeTask {
+  id: string;
+  initiative_id: string;
+  title: string;
+  status: InitiativeTaskStatus;
+  assignee?: string;
+  due_date?: string;
+  sort_order: number;
+  created_at: string;
+  updated_at: string;
+}
+
 // Interações (log unificado por contato)
 export type InteractionChannel = 'email' | 'whatsapp' | 'fathom' | 'calcom' | 'manual';
 export type InteractionType    = 'message_in' | 'message_out' | 'meeting' | 'email_in' | 'email_out' | 'booking' | 'note';
