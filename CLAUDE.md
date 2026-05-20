@@ -72,7 +72,7 @@ bash /root/pandora-os/scripts/deploy-dev.sh   # dev  → dev.campello.pro
 
 ### Login no app
 - Email: `mario@campello.me`
-- Senha: `***REMOVED***` (temporária — trocar)
+- Senha: definida no Supabase Auth (não commitar aqui)
 
 ---
 
@@ -258,6 +258,7 @@ Identidade unificada que liga email, WhatsApp e reuniões.
 | Coluna | Tipo | Notas |
 |--------|------|-------|
 | contact_id | uuid | FK contacts |
+| company_id | uuid | FK companies |
 | channel | text | whatsapp / email / calcom / manual / group |
 | confidence | text | very_high / high / medium / low |
 | title, description, raw_content, source_url | text | |
@@ -271,6 +272,8 @@ Múltiplas versões agrupadas por `proposal_group_id`.
 | Coluna | Tipo | Notas |
 |--------|------|-------|
 | client_id | uuid | FK clients |
+| opportunity_id | uuid | FK opportunities |
+| company_id | uuid | FK companies |
 | proposal_group_id | uuid | agrupa versões |
 | version | int | |
 | title, content_md | text | markdown |
@@ -285,6 +288,8 @@ Múltiplas versões agrupadas por `proposal_group_id`.
 | Coluna | Tipo | Notas |
 |--------|------|-------|
 | client_id | uuid | FK clients |
+| opportunity_id | uuid | FK opportunities |
+| company_id | uuid | FK companies |
 | contract_group_id, version | uuid, int | |
 | title, content_md | text | |
 | value | numeric | |

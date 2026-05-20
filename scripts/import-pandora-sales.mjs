@@ -9,8 +9,13 @@ import { readFileSync } from "fs";
 
 const BASE_URL  = process.env.NEXT_PUBLIC_SUPABASE_URL;
 const ANON_KEY  = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
-const EMAIL     = "mario@campello.me";
-const PASSWORD  = "***REMOVED***";
+const EMAIL     = process.env.ADMIN_EMAIL;
+const PASSWORD  = process.env.ADMIN_PASSWORD;
+
+if (!EMAIL || !PASSWORD) {
+  console.error("ADMIN_EMAIL e ADMIN_PASSWORD são obrigatórios.");
+  process.exit(1);
+}
 const APP_URL   = "https://app.campello.me";
 
 if (!BASE_URL || !ANON_KEY) {
