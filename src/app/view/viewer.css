@@ -1,0 +1,257 @@
+/* ── Pandora Doc Viewer — estilos do documento público ── */
+
+:root {
+  --doc-max: 72rem;
+  --doc-header-h: 58px;
+  --doc-sidebar-w: 260px;
+}
+
+/* ── Header fixo ── */
+.dv-header {
+  position: fixed;
+  top: 0; left: 0; right: 0;
+  height: var(--doc-header-h);
+  background: var(--pandora-violet-950);
+  color: #fff;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 24px;
+  z-index: 50;
+  gap: 16px;
+}
+.dv-header-brand {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-family: var(--font-display);
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  color: #fff;
+  text-decoration: none;
+  flex-shrink: 0;
+}
+.dv-header-brand img { width: 26px; height: 26px; }
+.dv-header-meta {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+}
+.dv-header-title {
+  font-family: var(--font-display);
+  font-size: 13px;
+  font-weight: 500;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  color: rgba(255,255,255,0.9);
+}
+.dv-header-subtitle {
+  font-size: 11px;
+  color: rgba(255,255,255,0.5);
+  font-family: var(--font-display);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+.dv-header-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
+}
+
+/* ── Botões do header ── */
+.dv-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 7px 14px;
+  border-radius: var(--radius-sm);
+  font-family: var(--font-display);
+  font-size: 12px;
+  font-weight: 500;
+  cursor: pointer;
+  border: none;
+  transition: background 150ms;
+  white-space: nowrap;
+}
+.dv-btn-ghost {
+  background: rgba(255,255,255,0.08);
+  color: rgba(255,255,255,0.85);
+}
+.dv-btn-ghost:hover { background: rgba(255,255,255,0.15); }
+.dv-btn-primary {
+  background: var(--pandora-violet-600);
+  color: #fff;
+}
+.dv-btn-primary:hover { background: var(--pandora-violet-500); }
+.dv-btn:disabled { opacity: 0.5; cursor: wait; }
+.dv-btn svg { width: 14px; height: 14px; }
+
+/* ── Layout corpo ── */
+.dv-body {
+  padding-top: var(--doc-header-h);
+  min-height: 100vh;
+  background: var(--pandora-ink-25, #fafafa);
+  color: var(--pandora-ink-800);
+  color-scheme: light;
+}
+
+/* ── Artigo (documento) ── */
+.dv-article {
+  max-width: 800px;
+  margin: 0 auto;
+  padding: 48px 48px 80px;
+  background: #fff;
+  min-height: calc(100vh - var(--doc-header-h));
+}
+
+/* ── Tipografia do documento ── */
+.dv-article h1 {
+  font-family: var(--font-display);
+  font-size: 22px;
+  font-weight: 700;
+  color: var(--pandora-violet-900);
+  margin: 0 0 8px;
+  line-height: 1.3;
+}
+.dv-article h2 {
+  font-family: var(--font-display);
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--pandora-violet-800);
+  margin: 32px 0 10px;
+  padding-bottom: 6px;
+  border-bottom: 1px solid var(--pandora-ink-100);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+.dv-article h3 {
+  font-family: var(--font-display);
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--pandora-violet-700);
+  margin: 22px 0 8px;
+}
+.dv-article h4, .dv-article h5, .dv-article h6 {
+  font-family: var(--font-display);
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--pandora-ink-700);
+  margin: 16px 0 6px;
+}
+.dv-article p {
+  font-size: 14px;
+  line-height: 1.75;
+  color: var(--pandora-ink-700);
+  margin: 0 0 12px;
+}
+.dv-article ul, .dv-article ol {
+  padding-left: 22px;
+  margin: 0 0 12px;
+}
+.dv-article li {
+  font-size: 14px;
+  line-height: 1.7;
+  color: var(--pandora-ink-700);
+  margin-bottom: 4px;
+}
+.dv-article blockquote {
+  border-left: 3px solid var(--pandora-green-400);
+  background: var(--pandora-ink-25, #fafafa);
+  margin: 12px 0;
+  padding: 10px 16px;
+  border-radius: 0 var(--radius-sm) var(--radius-sm) 0;
+}
+.dv-article blockquote p {
+  margin: 0;
+  font-size: 13px;
+  color: var(--pandora-ink-600);
+}
+.dv-article table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+  margin: 16px 0;
+}
+.dv-article th {
+  background: var(--pandora-ink-25, #f8f8f8);
+  font-family: var(--font-display);
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  padding: 8px 12px;
+  border: 1px solid var(--pandora-ink-100);
+  color: var(--pandora-ink-600);
+  text-align: left;
+}
+.dv-article td {
+  padding: 8px 12px;
+  border: 1px solid var(--pandora-ink-100);
+  color: var(--pandora-ink-700);
+  vertical-align: top;
+}
+.dv-article tr:nth-child(even) td { background: var(--pandora-ink-25, #fafafa); }
+.dv-article code {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  background: var(--pandora-ink-50, #f4f4f4);
+  padding: 1px 5px;
+  border-radius: 3px;
+  color: var(--pandora-violet-700);
+}
+.dv-article pre {
+  background: var(--pandora-ink-50, #f4f4f4);
+  border-radius: var(--radius-sm);
+  padding: 16px;
+  overflow-x: auto;
+  margin: 16px 0;
+}
+.dv-article pre code {
+  background: none;
+  padding: 0;
+  font-size: 12px;
+  color: var(--pandora-ink-800);
+}
+.dv-article hr {
+  border: none;
+  border-top: 1px solid var(--pandora-ink-100);
+  margin: 28px 0;
+}
+.dv-article a {
+  color: var(--pandora-violet-600);
+  text-decoration: underline;
+}
+.dv-article strong { font-weight: 600; color: var(--pandora-ink-800); }
+
+/* ── Status banner no viewer ── */
+.dv-status-bar {
+  background: var(--pandora-violet-50);
+  border-bottom: 1px solid var(--pandora-violet-100);
+  padding: 8px 24px;
+  font-size: 12px;
+  font-family: var(--font-display);
+  color: var(--pandora-violet-700);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: var(--doc-header-h);
+}
+
+/* ── Responsivo ── */
+@media (max-width: 768px) {
+  .dv-article { padding: 24px 20px 60px; }
+  .dv-header { padding: 0 16px; }
+  .dv-header-subtitle { display: none; }
+  .dv-btn span { display: none; }
+  .dv-btn { padding: 7px 10px; }
+}
+
+/* ── Print ── */
+@media print {
+  .dv-header, .dv-status-bar { display: none !important; }
+  .dv-body { padding-top: 0; }
+  .dv-article { max-width: none; padding: 20px; box-shadow: none; }
+}

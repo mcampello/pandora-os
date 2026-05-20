@@ -22,7 +22,13 @@ export async function middleware(request: NextRequest) {
   const { data: { user } } = await supabase.auth.getUser();
   const url = request.nextUrl.clone();
 
-  if (!user && url.pathname !== "/login" && !url.pathname.startsWith("/api/")) {
+  const isPublic =
+    url.pathname === "/login" ||
+    url.pathname.startsWith("/api/") ||
+    url.pathname.startsWith("/view/") ||
+    url.pathname.startsWith("/portal/");
+
+  if (!user && !isPublic) {
     url.pathname = "/login";
     return NextResponse.redirect(url);
   }

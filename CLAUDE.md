@@ -84,6 +84,8 @@ PRD completo: `/Users/mcampello/Library/CloudStorage/GoogleDrive-mario@campello.
 │   │   └── (app)/           # Rotas protegidas
 │   │       ├── layout.tsx   # Shell com Sidebar
 │   │       ├── page.tsx     # Dashboard
+│   │       ├── clientes/    # Contatos (lista, perfil, novo)
+│   │       ├── oportunidades/page.tsx
 │   │       └── configuracoes/conectores/page.tsx
 │   ├── components/
 │   │   └── Sidebar.tsx
@@ -133,6 +135,19 @@ ssh root@76.13.174.139 "cd /root/pandora-os && git add -A && git commit -m '...'
 ### `auth.users` (Supabase Auth)
 Usuário admin: `mario@campello.me`. Identity em `auth.identities` (provider: email).
 
+### `companies` — empresas (entidade central do CRM)
+Liga contacts, clients, opportunities, proposals e contracts.
+
+| Coluna | Tipo | Notas |
+|--------|------|-------|
+| id | uuid | PK |
+| name | text | obrigatório |
+| cnpj | text | |
+| website | text | |
+| industry | text | setor de atuação |
+| size | text | startup / pequena / media / grande / enterprise |
+| notes | text | |
+
 ### `contacts` — pessoas/entidades
 Identidade unificada que liga email, WhatsApp e reuniões.
 
@@ -140,6 +155,7 @@ Identidade unificada que liga email, WhatsApp e reuniões.
 |--------|------|-------|
 | id | uuid | PK |
 | name | text | obrigatório |
+| company_id | uuid | FK companies (novo) |
 | email, phone, company, role, linkedin_url, website | text | |
 | source | text | whatsapp / email / fathom / calcom / manual / indication |
 | tags | text[] | |
@@ -154,12 +170,16 @@ Um contact pode virar client quando há contrato.
 |--------|------|-------|
 | id | uuid | |
 | contact_id | uuid | FK contacts |
+| company_id | uuid | FK companies (novo) |
 | company_name | text | nome de exibição |
 | status | text | prospect / active / paused / former |
 | monthly_fee | numeric | R$/mês |
 | dedication_hours | int | horas/mês |
 | contract_start, contract_end | date | |
 | renewal_auto | bool | default true |
+| health_score | int | 1–10, risco de churn |
+| health_notes | text | observações sobre saúde do cliente |
+| health_updated_at | timestamptz | |
 
 ### `opportunities` — oportunidades detectadas
 | Coluna | Tipo | Notas |
@@ -199,6 +219,26 @@ Idem propostas. `contract_group_id` agrupa versões. Suporta diff visual entre v
 | starts_at, ends_at | date | |
 | signed_at | timestamptz | |
 | signature_provider, signature_external_id | text | clicksign / d4sign etc |
+
+### `deliverables` — entregas mensais por cliente (operação)
+
+| Coluna | Tipo | Notas |
+|--------|------|-------|
+| client_id | uuid | FK clients (cascade) |
+| month | date | sempre dia 1 do mês: 2026-05-01 |
+| title | text | descrição da entrega |
+| done | bool | default false |
+| notes | text | |
+| due_date | date | prazo opcional |
+
+### `hours_entries` — horas dedicadas por cliente (operação)
+
+| Coluna | Tipo | Notas |
+|--------|------|-------|
+| client_id | uuid | FK clients (cascade) |
+| date | date | data do lançamento |
+| hours | numeric(5,2) | horas (ex: 1.5, 2.0) |
+| description | text | |
 
 ### `interactions` — log unificado por contato
 Eventos vindos de qualquer canal.
@@ -258,8 +298,11 @@ Ver TodoWrite atualizado pelo Claude. Resumo do status:
 - [x] Autenticação (Supabase Auth + middleware)
 - [ ] Schema completo (clients, opportunities, proposals, contracts)
 - [ ] Gmail OAuth real
-- [ ] Tela de Clientes (perfil unificado)
-- [ ] Tela de Oportunidades
+- [x] Tela de Clientes (perfil unificado)
+- [x] Tela de Oportunidades (kanban + lista, API GET/PATCH)
+- [x] Propostas (lista, drawer, viewer público /view/p/[id], API)
+- [x] Contratos (lista, drawer, viewer público /view/c/[id], API)
+- [x] Módulo Operação (/operacao) — health score, entregas, horas por cliente
 - [ ] Telegram Bot
 - [ ] Detector de oportunidades (AI)
 - [ ] Propostas com AI

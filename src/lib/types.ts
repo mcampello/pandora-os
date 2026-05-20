@@ -2,6 +2,21 @@
 // Pandora OS — Tipos do banco (espelham schema Supabase)
 // ────────────────────────────────────────────
 
+// Empresas
+export type CompanySize = 'startup' | 'pequena' | 'media' | 'grande' | 'enterprise';
+
+export interface Company {
+  id: string;
+  name: string;
+  cnpj?: string;
+  website?: string;
+  industry?: string;
+  size?: CompanySize;
+  notes?: string;
+  created_at: string;
+  updated_at: string;
+}
+
 // Conectores
 export type ConnectorType = 'gmail' | 'gcalendar' | 'whatsapp' | 'fathom' | 'calcom' | 'telegram' | 'asaas';
 export type ConnectorStatus = 'connected' | 'disconnected' | 'error';
@@ -36,6 +51,7 @@ export interface Contact {
   email?: string;
   phone?: string;
   company?: string;
+  company_id?: string;
   role?: string;
   linkedin_url?: string;
   website?: string;
@@ -63,6 +79,7 @@ export type ClientStatus = 'prospect' | 'active' | 'paused' | 'former';
 export interface Client {
   id: string;
   contact_id?: string;
+  company_id?: string;
   company_name: string;
   status: ClientStatus;
   monthly_fee?: number;
@@ -71,6 +88,9 @@ export interface Client {
   contract_end?: string;
   renewal_auto: boolean;
   notes?: string;
+  health_score?: number;
+  health_notes?: string;
+  health_updated_at?: string;
   created_at: string;
   updated_at: string;
 }
@@ -94,8 +114,23 @@ export interface Opportunity {
   qualified_at?: string;
   converted_to_client_id?: string;
   notes?: string;
+  value?: number;
+  contract_model?: string;
+  company?: string;
   created_at: string;
   updated_at: string;
+}
+
+export interface OpportunityProposalSnippet {
+  id: string;
+  title: string;
+  value?: number;
+  status: string;
+}
+
+export interface OpportunityWithContact extends Opportunity {
+  contact?: Pick<Contact, "id" | "name" | "company" | "email" | "phone"> | null;
+  proposals?: OpportunityProposalSnippet[];
 }
 
 // Propostas
@@ -104,6 +139,7 @@ export type ProposalStatus = 'draft' | 'sent' | 'viewed' | 'accepted' | 'rejecte
 export interface Proposal {
   id: string;
   client_id?: string;
+  opportunity_id?: string;
   proposal_group_id: string;
   version: number;
   title: string;
@@ -118,12 +154,18 @@ export interface Proposal {
   updated_at: string;
 }
 
+export interface ProposalWithRefs extends Proposal {
+  client?: Pick<Client, "id" | "company_name" | "status"> | null;
+  opportunity?: Pick<Opportunity, "id" | "title" | "status"> | null;
+}
+
 // Contratos
 export type ContractStatus = 'draft' | 'in_review' | 'signed' | 'active' | 'ended' | 'cancelled';
 
 export interface Contract {
   id: string;
   client_id?: string;
+  opportunity_id?: string;
   contract_group_id: string;
   version: number;
   title: string;
@@ -140,6 +182,11 @@ export interface Contract {
   updated_at: string;
 }
 
+export interface ContractWithRefs extends Contract {
+  client?: Pick<Client, "id" | "company_name" | "status"> | null;
+  opportunity?: Pick<Opportunity, "id" | "title" | "status"> | null;
+}
+
 // Snapshots de análise AI por contato
 export interface AnalysisSnapshot {
   id: string;
@@ -153,6 +200,29 @@ export interface AnalysisSnapshot {
   message_count: number;
   model?: string;
   created_at: string;
+}
+
+// Operação — entregas mensais e horas
+export interface Deliverable {
+  id: string;
+  client_id: string;
+  month: string; // date, always first day of month: '2026-05-01'
+  title: string;
+  done: boolean;
+  notes?: string;
+  due_date?: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface HoursEntry {
+  id: string;
+  client_id: string;
+  date: string; // date
+  hours: number;
+  description?: string;
+  created_at: string;
+  updated_at: string;
 }
 
 // Interações (log unificado por contato)

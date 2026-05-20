@@ -85,7 +85,11 @@ export default function ClientesPage() {
 
   async function load() {
     setLoading(true);
-    const { data } = await supabase.from("contacts_with_stats").select("*");
+    const { data } = await supabase
+      .from("contacts_with_stats")
+      .select("*")
+      .order("last_interaction_at", { ascending: false, nullsFirst: false })
+      .limit(500);
     setContacts((data as ContactWithStats[]) ?? []);
     setLoading(false);
   }

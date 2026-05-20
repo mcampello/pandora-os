@@ -5,25 +5,60 @@ import Link from "next/link";
 import Image from "next/image";
 import { useRouter, usePathname } from "next/navigation";
 import {
-  LayoutDashboard, Users, Zap, FileText, ScrollText, Wallet, Settings,
-  ChevronLeft, ChevronRight, LogOut,
+  LayoutDashboard, Building2, Users, Zap, FileText, ScrollText,
+  ClipboardList, Wallet, Settings, ChevronLeft, ChevronRight,
+  ChevronDown, LogOut,
 } from "lucide-react";
 import { clsx } from "clsx";
 import { supabaseBrowser } from "@/lib/supabase-browser";
 
-const navItems = [
-  { href: "/",              label: "Dashboard",     icon: LayoutDashboard },
-  { href: "/clientes",      label: "Contatos",      icon: Users },
-  { href: "/oportunidades", label: "Oportunidades", icon: Zap },
-  { href: "/propostas",     label: "Propostas",     icon: FileText },
-  { href: "/contratos",     label: "Contratos",     icon: ScrollText },
-  { href: "/financeiro",    label: "Financeiro",    icon: Wallet },
+interface NavItem {
+  href: string;
+  label: string;
+  icon: React.ElementType;
+}
+
+interface NavGroup {
+  label: string;
+  items: NavItem[];
+}
+
+const navGroups: NavGroup[] = [
+  {
+    label: "CRM",
+    items: [
+      { href: "/empresas",      label: "Empresas",      icon: Building2 },
+      { href: "/clientes",      label: "Contatos",      icon: Users },
+      { href: "/oportunidades", label: "Oportunidades", icon: Zap },
+    ],
+  },
+  {
+    label: "Comercial",
+    items: [
+      { href: "/propostas",  label: "Propostas", icon: FileText },
+      { href: "/contratos",  label: "Contratos", icon: ScrollText },
+    ],
+  },
+  {
+    label: "Operação",
+    items: [
+      { href: "/operacao",   label: "Operação",   icon: ClipboardList },
+      { href: "/financeiro", label: "Financeiro", icon: Wallet },
+    ],
+  },
 ];
 
 export default function Sidebar() {
-  const [collapsed, setCollapsed] = useState(false);
+  const [collapsed, setCollapsed]   = useState(false);
+  const [openGroups, setOpenGroups] = useState<Record<string, boolean>>({
+    CRM: true, Comercial: true, Operação: true,
+  });
   const pathname = usePathname();
   const router   = useRouter();
+
+  function toggleGroup(label: string) {
+    setOpenGroups(prev => ({ ...prev, [label]: !prev[label] }));
+  }
 
   async function logout() {
     const supabase = supabaseBrowser();
@@ -42,6 +77,7 @@ export default function Sidebar() {
           height={collapsed ? 36 : 28}
           className="pda-brand-logo"
           priority
+          unoptimized
         />
         <span className="pda-brand-label">Pandora OS</span>
         <button
@@ -50,27 +86,83 @@ export default function Sidebar() {
           onClick={() => setCollapsed(!collapsed)}
           title={collapsed ? "Expandir menu" : "Recolher menu"}
           aria-expanded={!collapsed}
-          aria-label={collapsed ? "Expandir menu lateral" : "Recolher menu lateral"}
         >
           {collapsed ? <ChevronRight size={18} /> : <ChevronLeft size={16} />}
         </button>
       </div>
 
-      <div className="pda-nav-section">Menu</div>
-      <ul className="pda-nav">
-        {navItems.map(({ href, label, icon: Icon }) => (
-          <li key={href}>
-            <Link
-              href={href}
-              className={clsx("pda-nav-item", pathname === href && "active")}
-              title={collapsed ? label : undefined}
-            >
-              <Icon size={16} />
-              <span className="pda-nav-label">{label}</span>
-            </Link>
-          </li>
-        ))}
+      {/* Dashboard fora dos grupos */}
+      <ul className="pda-nav" style={{ marginTop: 8 }}>
+        <li>
+          <Link
+            href="/"
+            className={clsx("pda-nav-item", pathname === "/" && "active")}
+            title={collapsed ? "Dashboard" : undefined}
+          >
+            <LayoutDashboard size={16} />
+            <span className="pda-nav-label">Dashboard</span>
+          </Link>
+        </li>
       </ul>
+
+      {/* Grupos colapsáveis */}
+      {navGroups.map(group => {
+        const isOpen = openGroups[group.label] ?? true;
+        const hasActive = group.items.some(i => pathname.startsWith(i.href));
+
+        return (
+          <div key={group.label}>
+            <button
+              type="button"
+              onClick={() => !collapsed && toggleGroup(group.label)}
+              className="pda-nav-section"
+              style={{
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "space-between",
+                width: "100%",
+                cursor: collapsed ? "default" : "pointer",
+                background: "none",
+                border: "none",
+                padding: "0 16px",
+                color: hasActive && collapsed
+                  ? "var(--pandora-violet-400)"
+                  : undefined,
+              }}
+              title={collapsed ? group.label : undefined}
+            >
+              <span>{collapsed ? group.label.slice(0, 1) : group.label}</span>
+              {!collapsed && (
+                <ChevronDown
+                  size={12}
+                  style={{
+                    transform: isOpen ? "rotate(0deg)" : "rotate(-90deg)",
+                    transition: "transform 150ms",
+                    opacity: 0.5,
+                  }}
+                />
+              )}
+            </button>
+
+            {(isOpen || collapsed) && (
+              <ul className="pda-nav">
+                {group.items.map(({ href, label, icon: Icon }) => (
+                  <li key={href}>
+                    <Link
+                      href={href}
+                      className={clsx("pda-nav-item", pathname.startsWith(href) && "active")}
+                      title={collapsed ? label : undefined}
+                    >
+                      <Icon size={16} />
+                      <span className="pda-nav-label">{label}</span>
+                    </Link>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
+        );
+      })}
 
       <div style={{ marginTop: "auto" }}>
         <div className="pda-nav-section">Sistema</div>

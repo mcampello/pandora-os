@@ -4,7 +4,8 @@ import { useEffect, useState } from "react";
 import { useParams } from "next/navigation";
 import Link from "next/link";
 import { supabaseBrowser } from "@/lib/supabase-browser";
-import type { Contact, Interaction, AnalysisSnapshot, OpportunityChannel, OpportunityConfidence, ContactCategory } from "@/lib/types";
+import type { Contact, Interaction, AnalysisSnapshot, OpportunityChannel, OpportunityConfidence, ContactCategory, OpportunityWithContact } from "@/lib/types";
+import { STATUS_LABEL, STATUS_COLOR, timeAgo } from "@/lib/opportunities";
 import {
   ArrowLeft, Mail, Phone, Link2, Globe, Building2, Briefcase,
   Sparkles, TrendingUp, RefreshCw, ExternalLink, Pencil, Check, X,
@@ -45,6 +46,12 @@ export default function ContatoPage() {
   const [updateForm, setUpdateForm] = useState(false);
   const [updateSaving, setUpdateSaving] = useState(false);
   const [update, setUpdate] = useState({ subject: "", content: "", type: "note", occurred_at: new Date().toISOString().slice(0, 16) });
+  const [contactOpps, setContactOpps] = useState<OpportunityWithContact[]>([]);
+
+  async function loadOpportunities() {
+    const res = await fetch(`/api/opportunities?contact_id=${id}`);
+    if (res.ok) setContactOpps((await res.json()) as OpportunityWithContact[]);
+  }
 
   async function load() {
     const { data: c } = await supabase.from("contacts").select("*").eq("id", id).maybeSingle();
@@ -60,6 +67,7 @@ export default function ContatoPage() {
       .from("contact_analysis_snapshots").select("*").eq("contact_id", id)
       .order("created_at", { ascending: false }).limit(20);
     setSnapshots((snaps as AnalysisSnapshot[]) ?? []);
+    await loadOpportunities();
   }
 
   function startEdit() {
@@ -141,41 +149,49 @@ export default function ContatoPage() {
     setCalResult(null);
     setWaResult(null);
     try {
-      if (contact.email) {
-        const calRes = await fetch(`/api/contacts/${id}/sync-calendar`, { method: "POST" });
-        const calData = await calRes.json();
-        if (calRes.ok) {
-          setCalResult(`${calData.created} novas reuniões, ${calData.updated} atualizadas (${calData.relevant} com este contato)`);
-        } else {
-          setCalResult(`Erro: ${calData.error}`);
-        }
+      const syncs: Promise<void>[] = [];
 
-        const gRes = await fetch(`/api/contacts/${id}/sync-gmail`, { method: "POST" });
-        const gData = await gRes.json();
-        if (gRes.ok) {
-          setGmailResult(`${gData.created} emails novos importados (${gData.synced} threads encontradas)`);
-        } else {
-          setGmailResult(`Erro: ${gData.error}`);
-        }
+      if (contact.email) {
+        syncs.push(
+          fetch(`/api/contacts/${id}/sync-calendar`, { method: "POST" })
+            .then((r) => r.json())
+            .then((d) => {
+              if (d.error) setCalResult(`Erro: ${d.error}`);
+              else setCalResult(`${d.created} novas reuniões, ${d.updated} atualizadas (${d.relevant} com este contato)`);
+            })
+            .catch(() => setCalResult("Erro ao sincronizar calendário"))
+        );
+        syncs.push(
+          fetch(`/api/contacts/${id}/sync-gmail`, { method: "POST" })
+            .then((r) => r.json())
+            .then((d) => {
+              if (d.error) setGmailResult(`Erro: ${d.error}`);
+              else setGmailResult(`${d.created} emails novos importados (${d.synced} threads encontradas)`);
+            })
+            .catch(() => setGmailResult("Erro ao sincronizar Gmail"))
+        );
       } else {
         setCalResult(null);
         setGmailResult(null);
       }
 
       if (contact.phone) {
-        const waRes = await fetch(`/api/contacts/${id}/sync-whatsapp`, { method: "POST" });
-        const waData = await waRes.json();
-        if (waRes.ok) {
-          setWaResult(
-            typeof waData.days_imported === "number"
-              ? `${waData.days_imported} novos dias importados (${waData.synced} mensagens)`
-              : (waData.message ?? "")
-          );
-        } else {
-          setWaResult(`Erro: ${waData.error}`);
-        }
+        syncs.push(
+          fetch(`/api/contacts/${id}/sync-whatsapp`, { method: "POST" })
+            .then((r) => r.json())
+            .then((d) => {
+              if (d.error) setWaResult(`Erro: ${d.error}`);
+              else setWaResult(
+                typeof d.days_imported === "number"
+                  ? `${d.days_imported} novos dias importados (${d.synced} mensagens)`
+                  : (d.message ?? "")
+              );
+            })
+            .catch(() => setWaResult("Erro ao sincronizar WhatsApp"))
+        );
       }
 
+      await Promise.all(syncs);
       await load();
 
       const intelRes = await fetch(`/api/contacts/${id}/intel`, { method: "POST" });
@@ -201,6 +217,7 @@ export default function ContatoPage() {
       setOppForm(false);
       setOpp({ title: "", description: "", channel: "whatsapp", confidence: "medium" });
       setTimeout(() => setOppSuccess(false), 3000);
+      await loadOpportunities();
     }
     setOppSaving(false);
   }
@@ -620,6 +637,62 @@ export default function ContatoPage() {
                 )}
               </div>
             )}
+
+            <div className="pda-card" style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+              <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                <Zap size={14} color="var(--pandora-violet-500)" />
+                <span className="pda-eyebrow" style={{ flex: 1 }}>Oportunidades</span>
+                {contactOpps.length > 0 && (
+                  <Link
+                    href={`/oportunidades?contact_id=${id}`}
+                    style={{ fontSize: 11, color: "var(--pandora-violet-600)", textDecoration: "none" }}
+                  >
+                    Ver todas
+                  </Link>
+                )}
+              </div>
+              {contactOpps.length === 0 ? (
+                <p style={{ fontSize: 12, color: "var(--pandora-ink-400)", margin: 0 }}>
+                  Nenhuma oportunidade vinculada.
+                </p>
+              ) : (
+                <ul style={{ listStyle: "none", margin: 0, padding: 0, display: "flex", flexDirection: "column", gap: 8 }}>
+                  {contactOpps.slice(0, 5).map((o) => (
+                    <li key={o.id}>
+                      <Link
+                        href={`/oportunidades?contact_id=${id}`}
+                        style={{
+                          display: "flex",
+                          flexDirection: "column",
+                          gap: 4,
+                          textDecoration: "none",
+                          padding: "8px 10px",
+                          borderRadius: "var(--radius-sm)",
+                          border: "1px solid var(--pandora-ink-100)",
+                        }}
+                      >
+                        <span style={{ fontSize: 13, fontWeight: 500, color: "var(--pandora-violet-900)" }}>{o.title}</span>
+                        <span style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
+                          <span
+                            className="pda-badge"
+                            style={{
+                              background: `${STATUS_COLOR[o.status]}18`,
+                              color: STATUS_COLOR[o.status],
+                              fontSize: 9,
+                            }}
+                          >
+                            {STATUS_LABEL[o.status]}
+                          </span>
+                          <span style={{ fontSize: 10, color: "var(--pandora-ink-400)", fontFamily: "var(--font-mono)" }}>
+                            {timeAgo(o.detected_at)}
+                          </span>
+                        </span>
+                      </Link>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </div>
           </div>
 
           {/* ── COLUNA DIREITA ── */}

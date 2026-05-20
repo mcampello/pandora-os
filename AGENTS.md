@@ -84,6 +84,8 @@ PRD completo: `/Users/mcampello/Library/CloudStorage/GoogleDrive-mario@campello.
 │   │   └── (app)/           # Rotas protegidas
 │   │       ├── layout.tsx   # Shell com Sidebar
 │   │       ├── page.tsx     # Dashboard
+│   │       ├── clientes/    # Contatos (lista, perfil, novo)
+│   │       ├── oportunidades/page.tsx
 │   │       └── configuracoes/conectores/page.tsx
 │   ├── components/
 │   │   └── Sidebar.tsx
@@ -258,8 +260,8 @@ Ver TodoWrite atualizado pelo Claude. Resumo do status:
 - [x] Autenticação (Supabase Auth + middleware)
 - [ ] Schema completo (clients, opportunities, proposals, contracts)
 - [ ] Gmail OAuth real
-- [ ] Tela de Clientes (perfil unificado)
-- [ ] Tela de Oportunidades
+- [x] Tela de Clientes (perfil unificado)
+- [x] Tela de Oportunidades (kanban + lista, API GET/PATCH)
 - [ ] Telegram Bot
 - [ ] Detector de oportunidades (AI)
 - [ ] Propostas com AI
