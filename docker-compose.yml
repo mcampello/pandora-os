@@ -7,6 +7,25 @@ services:
       - .:/app
       - /app/node_modules
       - /app/.next
+    env_file:
+      - .env.local
+    environment:
+      - NODE_ENV=development
+      - HOSTNAME=0.0.0.0
+    networks:
+      - docs-site_docs_net
+
+  pandora-os-dev:
+    build:
+      context: /root/pandora-os-dev
+    container_name: pandora-os-dev
+    restart: unless-stopped
+    volumes:
+      - /root/pandora-os-dev:/app
+      - pandora-os-dev-node-modules:/app/node_modules
+      - pandora-os-dev-next:/app/.next
+    env_file:
+      - .env.dev
     environment:
       - NODE_ENV=development
       - HOSTNAME=0.0.0.0
@@ -16,3 +35,7 @@ services:
 networks:
   docs-site_docs_net:
     external: true
+
+volumes:
+  pandora-os-dev-node-modules:
+  pandora-os-dev-next:
