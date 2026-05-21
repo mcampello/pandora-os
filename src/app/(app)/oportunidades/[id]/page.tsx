@@ -317,7 +317,7 @@ export default function OportunidadeDetailPage({ params }: { params: Promise<{ i
 
   if (!opp) return null;
 
-  const isConverted = opp.status === "converted";
+  const isConverted = opp.status === "operacional";
   const clientId = opp.converted_to_client_id ?? opp.client?.id;
   const statusColor = STATUS_COLOR[opp.status] ?? "var(--pandora-ink-400)";
 
@@ -364,7 +364,7 @@ export default function OportunidadeDetailPage({ params }: { params: Promise<{ i
           <div style={{ flex: 1, minWidth: 0 }}>
             {editing ? (
               <input value={editForm.title} onChange={e => setEditForm(f => ({ ...f, title: e.target.value }))}
-                style={{ fontSize: 22, fontWeight: 700, width: "100%", background: "var(--pandora-ink-900)", border: "1px solid var(--pandora-ink-700)", borderRadius: 6, padding: "4px 10px", color: "inherit", fontFamily: "var(--font-display)" }} />
+                style={{ fontSize: 22, fontWeight: 700, width: "100%", background: "var(--pandora-ink-0)", border: "1px solid var(--pandora-ink-200)", borderRadius: 6, padding: "4px 10px", color: "inherit", fontFamily: "var(--font-display)" }} />
             ) : (
               <h1 style={{ margin: 0, fontSize: 22, fontFamily: "var(--font-display)", lineHeight: 1.2 }}>{opp.title}</h1>
             )}
@@ -449,7 +449,7 @@ export default function OportunidadeDetailPage({ params }: { params: Promise<{ i
               {editing ? (
                 <textarea value={editForm.description} onChange={e => setEditForm(f => ({ ...f, description: e.target.value }))}
                   rows={4} placeholder="Descreva a oportunidade..."
-                  style={{ width: "100%", background: "var(--pandora-ink-900)", border: "1px solid var(--pandora-ink-700)", borderRadius: 6, padding: "8px 10px", color: "inherit", resize: "vertical", fontSize: 13, boxSizing: "border-box" }} />
+                  style={{ width: "100%", background: "var(--pandora-ink-0)", border: "1px solid var(--pandora-ink-200)", borderRadius: 6, padding: "8px 10px", color: "inherit", resize: "vertical", fontSize: 13, boxSizing: "border-box" }} />
               ) : (
                 <p style={{ margin: 0, fontSize: 14, color: opp.description ? "inherit" : "var(--pandora-ink-500)", lineHeight: 1.6 }}>
                   {opp.description || "Sem descrição"}
@@ -463,7 +463,7 @@ export default function OportunidadeDetailPage({ params }: { params: Promise<{ i
               {editing ? (
                 <textarea value={editForm.notes} onChange={e => setEditForm(f => ({ ...f, notes: e.target.value }))}
                   rows={3} placeholder="Notas privadas sobre esta oportunidade..."
-                  style={{ width: "100%", background: "var(--pandora-ink-900)", border: "1px solid var(--pandora-ink-700)", borderRadius: 6, padding: "8px 10px", color: "inherit", resize: "vertical", fontSize: 13, boxSizing: "border-box" }} />
+                  style={{ width: "100%", background: "var(--pandora-ink-0)", border: "1px solid var(--pandora-ink-200)", borderRadius: 6, padding: "8px 10px", color: "inherit", resize: "vertical", fontSize: 13, boxSizing: "border-box" }} />
               ) : (
                 <p style={{ margin: 0, fontSize: 14, color: opp.notes ? "inherit" : "var(--pandora-ink-500)", lineHeight: 1.6 }}>
                   {opp.notes || "Sem notas"}
@@ -480,19 +480,19 @@ export default function OportunidadeDetailPage({ params }: { params: Promise<{ i
                     <div style={{ fontSize: 11, color: "var(--pandora-ink-500)", marginBottom: 4, fontFamily: "var(--font-display)", letterSpacing: "0.05em", textTransform: "uppercase" }}>Valor (R$)</div>
                     <input type="number" value={editForm.value} onChange={e => setEditForm(f => ({ ...f, value: e.target.value }))}
                       placeholder="0,00" min="0" step="0.01"
-                      style={{ width: "100%", background: "var(--pandora-ink-900)", border: "1px solid var(--pandora-ink-700)", borderRadius: 6, padding: "7px 10px", color: "inherit", fontSize: 13, boxSizing: "border-box" }} />
+                      style={{ width: "100%", background: "var(--pandora-ink-0)", border: "1px solid var(--pandora-ink-200)", borderRadius: 6, padding: "7px 10px", color: "inherit", fontSize: 13, boxSizing: "border-box" }} />
                   </div>
                   <div>
                     <div style={{ fontSize: 11, color: "var(--pandora-ink-500)", marginBottom: 4, fontFamily: "var(--font-display)", letterSpacing: "0.05em", textTransform: "uppercase" }}>Empresa</div>
                     <input value={editForm.company} onChange={e => setEditForm(f => ({ ...f, company: e.target.value }))}
                       placeholder="Nome da empresa…"
-                      style={{ width: "100%", background: "var(--pandora-ink-900)", border: "1px solid var(--pandora-ink-700)", borderRadius: 6, padding: "7px 10px", color: "inherit", fontSize: 13, boxSizing: "border-box" }} />
+                      style={{ width: "100%", background: "var(--pandora-ink-0)", border: "1px solid var(--pandora-ink-200)", borderRadius: 6, padding: "7px 10px", color: "inherit", fontSize: 13, boxSizing: "border-box" }} />
                   </div>
                   <div>
                     <div style={{ fontSize: 11, color: "var(--pandora-ink-500)", marginBottom: 4, fontFamily: "var(--font-display)", letterSpacing: "0.05em", textTransform: "uppercase" }}>Modelo</div>
                     <input value={editForm.contract_model} onChange={e => setEditForm(f => ({ ...f, contract_model: e.target.value }))}
                       placeholder="Ex: mensal, projeto…"
-                      style={{ width: "100%", background: "var(--pandora-ink-900)", border: "1px solid var(--pandora-ink-700)", borderRadius: 6, padding: "7px 10px", color: "inherit", fontSize: 13, boxSizing: "border-box" }} />
+                      style={{ width: "100%", background: "var(--pandora-ink-0)", border: "1px solid var(--pandora-ink-200)", borderRadius: 6, padding: "7px 10px", color: "inherit", fontSize: 13, boxSizing: "border-box" }} />
                   </div>
                 </div>
               ) : null}
@@ -717,7 +717,7 @@ export default function OportunidadeDetailPage({ params }: { params: Promise<{ i
                   </div>
 
                   {/* Credenciais */}
-                  <div style={{ background: "var(--pandora-ink-900)", borderRadius: 8, padding: 14, display: "flex", flexDirection: "column", gap: 10 }}>
+                  <div style={{ background: "var(--pandora-ink-50)", border: "1px solid var(--pandora-ink-100)", borderRadius: 8, padding: 14, display: "flex", flexDirection: "column", gap: 10 }}>
                     <CredRow label="URL"   value={`${typeof window !== "undefined" ? window.location.origin : ""}/portal/${portal.slug}`} fieldKey="url" copiedField={copiedField} onCopy={copyField} mono />
                     <CredRow label="Email" value={portal.login_email} fieldKey="email" copiedField={copiedField} onCopy={copyField} />
                     {portalCredentials ? (
@@ -740,7 +740,7 @@ export default function OportunidadeDetailPage({ params }: { params: Promise<{ i
                   {resetMode ? (
                     <div style={{ display: "flex", gap: 8 }}>
                       <input type="text" value={newPwd} onChange={e => setNewPwd(e.target.value)} placeholder="Nova senha"
-                        style={{ flex: 1, padding: "8px 10px", background: "var(--pandora-ink-900)", border: "1px solid var(--pandora-ink-700)", borderRadius: 6, color: "inherit", fontSize: 13 }} />
+                        style={{ flex: 1, padding: "8px 10px", background: "var(--pandora-ink-0)", border: "1px solid var(--pandora-ink-200)", borderRadius: 6, color: "inherit", fontSize: 13 }} />
                       <button className="pda-btn" disabled={portalSaving || !newPwd} onClick={resetPassword} style={{ fontSize: 12 }}>
                         {portalSaving ? "..." : "Salvar"}
                       </button>
@@ -780,7 +780,7 @@ export default function OportunidadeDetailPage({ params }: { params: Promise<{ i
               value={linkSearch}
               onChange={e => setLinkSearch(e.target.value)}
               autoFocus
-              style={{ width: "100%", padding: "10px 12px", background: "var(--pandora-ink-900)", border: "1px solid var(--pandora-ink-700)", borderRadius: 8, color: "inherit", fontSize: 13, boxSizing: "border-box", marginBottom: 8 }}
+              style={{ width: "100%", padding: "10px 12px", background: "var(--pandora-ink-0)", border: "1px solid var(--pandora-ink-200)", borderRadius: 8, color: "inherit", fontSize: 13, boxSizing: "border-box", marginBottom: 8 }}
             />
 
             {/* Dropdown list */}
@@ -807,8 +807,8 @@ export default function OportunidadeDetailPage({ params }: { params: Promise<{ i
                     style={{
                       display: "flex", alignItems: "center", gap: 12,
                       padding: "10px 12px", borderRadius: 8, cursor: "pointer", textAlign: "left",
-                      background: isSelected ? "var(--pandora-violet-600)" : "var(--pandora-ink-900)",
-                      border: `1px solid ${isSelected ? "var(--pandora-violet-500)" : "var(--pandora-ink-800)"}`,
+                      background: isSelected ? "var(--pandora-violet-600)" : "var(--pandora-ink-50)",
+                      border: `1px solid ${isSelected ? "var(--pandora-violet-500)" : "var(--pandora-ink-150, var(--pandora-ink-200))"}`,
                       color: "inherit", transition: "background 0.15s, border-color 0.15s",
                     }}
                   >
@@ -864,7 +864,7 @@ function CredRow({ label, value, fieldKey, copiedField, onCopy, mono }: {
         {value}
       </span>
       <button type="button" onClick={() => onCopy(value, fieldKey)}
-        style={{ background: "none", border: "1px solid var(--pandora-ink-700)", borderRadius: 4, padding: "3px 8px", cursor: "pointer", fontSize: 11, display: "flex", alignItems: "center", gap: 4, flexShrink: 0, color: copiedField === fieldKey ? "var(--pandora-green-400)" : "var(--pandora-ink-400)" }}>
+        style={{ background: "none", border: "1px solid var(--pandora-ink-200)", borderRadius: 4, padding: "3px 8px", cursor: "pointer", fontSize: 11, display: "flex", alignItems: "center", gap: 4, flexShrink: 0, color: copiedField === fieldKey ? "var(--pandora-green-400)" : "var(--pandora-ink-500)" }}>
         {copiedField === fieldKey ? <><Check size={10} /> Copiado</> : <><Copy size={10} /> Copiar</>}
       </button>
     </div>

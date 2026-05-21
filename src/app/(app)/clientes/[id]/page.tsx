@@ -1014,9 +1014,9 @@ const linkStyle: React.CSSProperties = {
 
 const inputStyle: React.CSSProperties = {
   width: "100%", padding: "5px 8px",
-  border: "1px solid var(--pandora-ink-100)",
+  border: "1px solid var(--pandora-ink-200)",
   borderRadius: 6, fontSize: 13,
   fontFamily: "var(--font-text)",
-  background: "#fff", color: "var(--pandora-violet-900)",
+  background: "var(--pandora-ink-0)", color: "var(--pandora-ink-800)",
   outline: "none", boxSizing: "border-box",
 };

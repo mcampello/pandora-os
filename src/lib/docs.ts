@@ -62,14 +62,14 @@ export function applyDynamicTokens(md: string): string {
 
 // ── Shared input style ────────────────────────────────
 export const inputStyle: CSSProperties = {
-  border: "1px solid var(--pandora-ink-100)",
+  border: "1px solid var(--pandora-ink-200)",
   borderRadius: "var(--radius-sm)",
   padding: "9px 12px",
   fontSize: 13,
   fontFamily: "var(--font-text)",
   outline: "none",
-  color: "var(--pandora-violet-900)",
-  background: "#fff",
+  color: "var(--pandora-ink-800)",
+  background: "var(--pandora-ink-0)",
   width: "100%",
 };
 
