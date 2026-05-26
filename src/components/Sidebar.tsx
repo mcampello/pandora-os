@@ -1,13 +1,13 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import Link from "next/link";
 import Image from "next/image";
 import { useRouter, usePathname } from "next/navigation";
 import {
   LayoutDashboard, Building2, Users, Zap, FileText, ScrollText,
   ClipboardList, Wallet, Settings, ChevronLeft, ChevronRight,
-  ChevronDown, LogOut,
+  ChevronDown, LogOut, CheckSquare,
 } from "lucide-react";
 import { clsx } from "clsx";
 import { supabaseBrowser } from "@/lib/supabase-browser";
@@ -49,12 +49,17 @@ const navGroups: NavGroup[] = [
 ];
 
 export default function Sidebar() {
-  const [collapsed, setCollapsed]   = useState(false);
+  const [collapsed, setCollapsed] = useState(true);
   const [openGroups, setOpenGroups] = useState<Record<string, boolean>>({
     CRM: true, Comercial: true, Operação: true,
   });
   const pathname = usePathname();
-  const router   = useRouter();
+  const router = useRouter();
+
+  // Collapse on every navigation
+  useEffect(() => {
+    setCollapsed(true);
+  }, [pathname]);
 
   function toggleGroup(label: string) {
     setOpenGroups(prev => ({ ...prev, [label]: !prev[label] }));
@@ -83,7 +88,7 @@ export default function Sidebar() {
         <button
           type="button"
           className="pda-collapse-btn pda-collapse-toggle"
-          onClick={() => setCollapsed(!collapsed)}
+          onClick={() => setCollapsed(c => !c)}
           title={collapsed ? "Expandir menu" : "Recolher menu"}
           aria-expanded={!collapsed}
         >
@@ -91,7 +96,6 @@ export default function Sidebar() {
         </button>
       </div>
 
-      {/* Dashboard fora dos grupos */}
       <ul className="pda-nav" style={{ marginTop: 8 }}>
         <li>
           <Link
@@ -103,36 +107,37 @@ export default function Sidebar() {
             <span className="pda-nav-label">Dashboard</span>
           </Link>
         </li>
+        <li>
+          <Link
+            href="/tarefas"
+            className={clsx("pda-nav-item", pathname.startsWith("/tarefas") && "active")}
+            title={collapsed ? "Tarefas" : undefined}
+          >
+            <CheckSquare size={16} />
+            <span className="pda-nav-label">Tarefas</span>
+          </Link>
+        </li>
       </ul>
 
-      {/* Grupos colapsáveis */}
       {navGroups.map(group => {
         const isOpen = openGroups[group.label] ?? true;
         const hasActive = group.items.some(i => pathname.startsWith(i.href));
 
         return (
           <div key={group.label}>
-            <button
-              type="button"
-              onClick={() => !collapsed && toggleGroup(group.label)}
-              className="pda-nav-section"
-              style={{
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "space-between",
-                width: "100%",
-                cursor: collapsed ? "default" : "pointer",
-                background: "none",
-                border: "none",
-                padding: "0 16px",
-                color: hasActive && collapsed
-                  ? "var(--pandora-violet-400)"
-                  : undefined,
-              }}
-              title={collapsed ? group.label : undefined}
-            >
-              <span>{collapsed ? group.label.slice(0, 1) : group.label}</span>
-              {!collapsed && (
+            {!collapsed && (
+              <button
+                type="button"
+                onClick={() => toggleGroup(group.label)}
+                className="pda-nav-section"
+                style={{
+                  display: "flex", alignItems: "center", justifyContent: "space-between",
+                  width: "100%", cursor: "pointer",
+                  background: "none", border: "none", padding: "0 16px",
+                }}
+                title={group.label}
+              >
+                <span>{group.label}</span>
                 <ChevronDown
                   size={12}
                   style={{
@@ -141,8 +146,8 @@ export default function Sidebar() {
                     opacity: 0.5,
                   }}
                 />
-              )}
-            </button>
+              </button>
+            )}
 
             {(isOpen || collapsed) && (
               <ul className="pda-nav">
