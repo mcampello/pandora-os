@@ -1,8 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import ReactMarkdown from "react-markdown";
-import remarkGfm from "remark-gfm";
+import MarkdownRenderer from "./MarkdownRenderer";
 import {
   ArrowLeft, Check, Copy, Download, ExternalLink,
   FileText, Globe, Loader2, RotateCcw, Send, Sparkles, X,
@@ -29,13 +28,16 @@ interface Props {
   backHref: string;
   backLabel: string;
   apiPath: string; // "/api/proposals" | "/api/contracts"
+  duplicateHref?: string;
+  // Shows a CTA banner when document reaches a specific status
+  nextAction?: { href: string; label: string; condition: DocStatus; message: string };
 }
 
 type SaveStatus = "saved" | "saving" | "unsaved" | "error";
 
 export default function DocEditor({
   id, type, initialTitle, initialContent, initialStatus,
-  viewerUrl, statusOptions, backHref, backLabel, apiPath,
+  viewerUrl, statusOptions, backHref, backLabel, apiPath, duplicateHref, nextAction,
 }: Props) {
   const [title, setTitle] = useState(initialTitle);
   const [content, setContent] = useState(initialContent);
@@ -51,6 +53,7 @@ export default function DocEditor({
   const [copied, setCopied] = useState(false);
   const [exportingPdf, setExportingPdf] = useState(false);
   const [exportingDocx, setExportingDocx] = useState(false);
+  const [signedClientId, setSignedClientId] = useState<string | null>(null);
   const articleRef = useRef<HTMLDivElement>(null);
   const aiBottomRef = useRef<HTMLDivElement>(null);
   const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -89,7 +92,16 @@ export default function DocEditor({
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ title, content_md: content, status }),
       });
-      setSaveStatus(res.ok ? "saved" : "error");
+      if (res.ok) {
+        setSaveStatus("saved");
+        // After signing a contract, detect the auto-created client
+        if (type === "c" && status === "signed") {
+          const data = await res.json().catch(() => null);
+          if (data?.client_id) setSignedClientId(data.client_id);
+        }
+      } else {
+        setSaveStatus("error");
+      }
     } catch {
       setSaveStatus("error");
     }
@@ -105,6 +117,7 @@ export default function DocEditor({
     setAiInput("");
     setAiMessages((prev) => [...prev, { role: "user", text: instruction }]);
     setAiLoading(true);
+    setPrevContent(content);
 
     try {
       const res = await fetch("/api/ai/improve", {
@@ -112,20 +125,37 @@ export default function DocEditor({
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ document: content, instruction, useWeb: aiUseWeb, title }),
       });
-      const data = await res.json();
-      if (data.content) {
-        setAiMessages((prev) => [
-          ...prev,
-          { role: "assistant", text: "Documento atualizado. Revise e salve quando estiver pronto." },
-        ]);
-        setPrevContent(content);
-        setContent(data.content);
-        setSaveStatus("unsaved");
-      } else {
-        setAiMessages((prev) => [...prev, { role: "assistant", text: data.error ?? "Erro ao processar." }]);
+
+      if (!res.ok || !res.body) {
+        const errData = await res.json().catch(() => ({})) as { error?: string };
+        setAiMessages((prev) => [...prev, { role: "assistant", text: errData.error ?? "Erro ao processar." }]);
+        setPrevContent(null);
+        return;
       }
+
+      // Stream the response — update textarea in real time
+      const reader = res.body.getReader();
+      const dec = new TextDecoder();
+      let accumulated = "";
+      setContent("");
+      setSaveStatus("unsaved");
+
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        accumulated += dec.decode(value, { stream: true });
+        setContent(accumulated);
+      }
+
+      setAiMessages((prev) => [
+        ...prev,
+        { role: "assistant", text: "Documento atualizado. Revise e salve quando estiver pronto." },
+      ]);
     } catch {
       setAiMessages((prev) => [...prev, { role: "assistant", text: "Erro de conexão com o assistente." }]);
+      // Restore original content on connection error
+      setContent(prevContent ?? content);
+      setPrevContent(null);
     } finally {
       setAiLoading(false);
     }
@@ -161,6 +191,7 @@ export default function DocEditor({
   const currentStatusOpt = statusOptions.find((s) => s.value === status);
 
   return (
+    <>
     <div className="de-root">
       {/* ── Toolbar ──────────────────────────────────────── */}
       <div className="de-toolbar">
@@ -193,6 +224,11 @@ export default function DocEditor({
             {saveStatus === "unsaved" && "Não salvo"}
             {saveStatus === "error"  && "Erro ao salvar"}
           </span>
+          {duplicateHref && (
+            <a className="de-btn de-btn-ghost" href={duplicateHref} title="Duplicar documento">
+              Duplicar
+            </a>
+          )}
           <button className="de-btn de-btn-ghost" onClick={copyLink} title="Copiar link do viewer">
             {copied ? <Check size={14} /> : <Copy size={14} />}
             {copied ? "Copiado" : "Link"}
@@ -215,6 +251,33 @@ export default function DocEditor({
           </button>
         </div>
       </div>
+
+      {/* ── Next Action Banner ───────────────────────────── */}
+      {nextAction && status === nextAction.condition && (
+        <div style={{
+          display: "flex", alignItems: "center", justifyContent: "space-between",
+          gap: 12, padding: "10px 20px",
+          background: "linear-gradient(90deg, rgba(45,212,160,0.12) 0%, rgba(45,212,160,0.06) 100%)",
+          borderBottom: "1px solid rgba(45,212,160,0.25)",
+          flexShrink: 0,
+        }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+            <Check size={14} style={{ color: "var(--pandora-green-400)", flexShrink: 0 }} />
+            <span style={{ fontSize: 13, color: "var(--pandora-ink-100)" }}>{nextAction.message}</span>
+          </div>
+          <a
+            href={nextAction.href}
+            style={{
+              display: "flex", alignItems: "center", gap: 6,
+              padding: "6px 14px", borderRadius: 8, fontSize: 13, fontWeight: 600,
+              background: "var(--pandora-green-400)", color: "#0a1a14",
+              textDecoration: "none", flexShrink: 0, whiteSpace: "nowrap",
+            }}
+          >
+            {nextAction.label} →
+          </a>
+        </div>
+      )}
 
       {/* ── Body ─────────────────────────────────────────── */}
       <div className="de-body">
@@ -240,9 +303,7 @@ export default function DocEditor({
             />
           ) : (
             <div className="de-preview" ref={articleRef}>
-              <ReactMarkdown remarkPlugins={[remarkGfm]}>
-                {processedContent}
-              </ReactMarkdown>
+              <MarkdownRenderer>{processedContent}</MarkdownRenderer>
             </div>
           )}
         </div>
@@ -319,5 +380,59 @@ export default function DocEditor({
         )}
       </div>
     </div>
+
+    {/* ── Contract Signed Modal ────────────────────────── */}
+    {signedClientId && (
+      <div style={{
+        position: "fixed", inset: 0, background: "rgba(0,0,0,0.7)",
+        display: "flex", alignItems: "center", justifyContent: "center", zIndex: 200,
+      }}>
+        <div style={{
+          background: "var(--pandora-ink-900)", border: "1px solid var(--pandora-ink-700)",
+          borderRadius: 16, padding: "36px 40px", width: 380, textAlign: "center",
+          display: "flex", flexDirection: "column", alignItems: "center", gap: 16,
+          boxShadow: "0 24px 64px rgba(0,0,0,0.5)",
+        }}>
+          <div style={{
+            width: 56, height: 56, borderRadius: "50%",
+            background: "rgba(45,212,160,0.15)", border: "1px solid rgba(45,212,160,0.3)",
+            display: "flex", alignItems: "center", justifyContent: "center",
+          }}>
+            <Check size={24} style={{ color: "var(--pandora-green-400)" }} />
+          </div>
+          <div>
+            <p style={{ fontFamily: "var(--font-display)", fontWeight: 700, fontSize: 18, margin: "0 0 6px", color: "var(--pandora-ink-50)" }}>
+              Contrato assinado!
+            </p>
+            <p style={{ fontSize: 13, color: "var(--pandora-ink-400)", margin: 0, lineHeight: 1.5 }}>
+              A operação foi iniciada automaticamente para este cliente.
+            </p>
+          </div>
+          <div style={{ display: "flex", gap: 10, marginTop: 4 }}>
+            <a
+              href={`/operacao/${signedClientId}`}
+              style={{
+                padding: "10px 20px", borderRadius: 8, fontSize: 13, fontWeight: 600,
+                background: "var(--pandora-violet-600)", color: "#fff",
+                textDecoration: "none", display: "flex", alignItems: "center", gap: 6,
+              }}
+            >
+              Ir para operação →
+            </a>
+            <button
+              onClick={() => setSignedClientId(null)}
+              style={{
+                padding: "10px 16px", borderRadius: 8, fontSize: 13,
+                background: "none", border: "1px solid var(--pandora-ink-700)",
+                color: "var(--pandora-ink-300)", cursor: "pointer",
+              }}
+            >
+              Fechar
+            </button>
+          </div>
+        </div>
+      </div>
+    )}
+    </>
   );
 }

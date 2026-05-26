@@ -204,6 +204,22 @@ Tokens em `src/app/globals.css`.
 - `.pda-eyebrow` — labels uppercase
 - `.pda-empty` — empty states
 
+### Diagramas e gráficos em documentos
+Propostas, contratos e qualquer documento `content_md` suportam **diagramas Mermaid** nativamente — renderizados com estética Pandora (violet + green). Use blocos de código com linguagem `mermaid`:
+
+````markdown
+```mermaid
+gantt
+  title Cronograma do Projeto
+  dateFormat YYYY-MM-DD
+  section Fase 1
+    Levantamento : 2026-06-01, 7d
+    Desenvolvimento : 2026-06-08, 21d
+```
+````
+
+Tipos úteis: `flowchart LR/TD`, `gantt`, `sequenceDiagram`, `pie`, `timeline`, `mindmap`, `xychart-beta`. Tabelas GFM também são renderizadas com estilo Pandora. **Sempre use Mermaid quando for visualizar processos, cronogramas, fluxos ou comparações** — não descreva em texto algo que um diagrama mostraria melhor.
+
 ---
 
 ## Schema do Banco
@@ -223,6 +239,9 @@ Liga contacts, clients, opportunities, proposals e contracts.
 | industry | text | setor de atuação |
 | size | text | startup / pequena / media / grande / enterprise |
 | notes | text | |
+| address_street, address_number, address_complement | text | endereço |
+| address_city, address_state, address_zip | text | endereço |
+| responsible_contact_id | uuid | FK contacts — responsável pelo contrato |
 
 ### `contacts` — pessoas/entidades
 Identidade unificada que liga email, WhatsApp e reuniões.
@@ -300,6 +319,34 @@ Múltiplas versões agrupadas por `proposal_group_id`.
 | starts_at, ends_at | date | |
 | signed_at | timestamptz | |
 | signature_provider, signature_external_id | text | clicksign / d4sign etc |
+| billing_type | text | mensal / fechado |
+| billing_day | int | dia do mês para faturar (contratos mensais) |
+
+### `contract_contacts` — pessoas vinculadas a um contrato (financeiro)
+
+| Coluna | Tipo | Notas |
+|--------|------|-------|
+| id | uuid | PK |
+| contract_id | uuid | FK contracts (cascade) |
+| contact_id | uuid | FK contacts (cascade) |
+| role | text | ex: decisor, financeiro, técnico |
+
+### `invoices` — notas fiscais e cobranças
+
+| Coluna | Tipo | Notas |
+|--------|------|-------|
+| id | uuid | PK |
+| contract_id | uuid | FK contracts |
+| company_id | uuid | FK companies |
+| client_id | uuid | FK clients |
+| month | date | mês de referência (sempre dia 1) |
+| number | text | número da NF |
+| amount | numeric | valor |
+| status | text | pendente / emitida / paga / cancelada |
+| due_date | date | vencimento |
+| issued_at, paid_at | timestamptz | |
+| asaas_id | text | reservado para integração Asaas |
+| notes | text | |
 
 ### `initiatives` — iniciativas por cliente (roadmap operacional)
 
@@ -360,6 +407,33 @@ Múltiplas versões agrupadas por `proposal_group_id`.
 ### `connectors` — conexões com serviços externos
 Armazena credenciais e status de cada integração (whatsapp, gmail, gcalendar, calcom, fathom).
 
+### `task_rules` — regras do agente de tarefas
+Cada regra built-in tem um `rule_key` único. `ai_generation_count` rastreia quantas vezes a AI gerou tarefas com aquela chave. Quando `ai_generation_count >= 3`, `metadata.flagged_for_promotion = true` (banner na UI).
+
+Função SQL: `increment_rule_count(p_rule_key text)` — incrementa contador e atualiza flag.
+
+Regras built-in: `whatsapp_unanswered_6h`, `opportunity_stale_7d`, `proposal_unviewed_5d`, `deliverable_due_3d`, `client_inactive_30d`, `meeting_no_followup_24h`.
+
+### `tasks` — fila de tarefas inteligente
+
+| Coluna | Tipo | Notas |
+|--------|------|-------|
+| id | uuid | PK |
+| title | text | obrigatório |
+| status | text | open / done / dismissed |
+| priority | text | critical / high / medium / low |
+| source | text | manual / rule / ai |
+| rule_key | text | FK task_rules.rule_key (nullable) |
+| entity_type | text | contact / client / opportunity / proposal / deliverable |
+| entity_id | uuid | ID da entidade vinculada |
+| ai_reasoning | text | explicação da AI |
+| dedup_key | text | UNIQUE — impede duplicatas por situação |
+| due_at | timestamptz | prazo opcional |
+| done_at / dismissed_at | timestamptz | timestamps de resolução |
+| metadata | jsonb | dados extras |
+
+RLS: `authenticated` full access + `anon` full access (necessário pois `SUPABASE_SERVICE_ROLE_KEY` não está configurado — admin client cai para anon key; segurança mantida via `AGENT_SECRET` no HTTP).
+
 ### `public.documents` — mensagens WhatsApp vetorizadas
 Ingeridas pelo N8N. **Não duplicar esta ingestão.** Tabelas relacionadas: `groups`, `participants`, `group_participants`.
 
@@ -385,15 +459,18 @@ Todas as tabelas com Row Level Security ativo. Política: `authenticated` tem fu
 - [x] Módulo Operação (/operacao) — índice de clientes ativos com navegação para /operacao/[id]
 - [x] Operação por cliente (/operacao/[id]) — kanban de iniciativas (backlog/active/paused/done) com tarefas ricas (todo/in_progress/blocked/done), painel de reuniões/transcrições, health score, fee e horas no header
 - [x] Portal do cliente (/portal/[slug])
+- [x] Módulo Financeiro (/financeiro) — lista de contratos ativos com KPIs (MRR, NFs pendentes), detalhe por contrato com 4 abas: Cliente (cadastro CNPJ/endereço/responsável), Escopo (markdown + condições), Pessoas (contacts + reuniões Fathom), Faturamento (NFs/invoices CRUD)
+- [x] Sistema de Tarefas Inteligente — agentes de background (`/api/agents/scan` + `/api/agents/ai-scan`), fila priorizada (`/tarefas`), TaskBell no topbar, widget no dashboard, contextual no perfil de contato
+- [ ] N8N: configurar 2 HTTP Request nodes — scan (1h) e ai-scan (6h) → `https://app.campello.me/api/agents/*` com `Authorization: Bearer {AGENT_SECRET}`
+- [ ] Configurar `SUPABASE_SERVICE_ROLE_KEY` corretamente em `.env.local` (atualmente vazio; admin client cai para anon)
 - [ ] Gmail OAuth real
 - [ ] Telegram Bot
 - [ ] Detector de oportunidades (AI)
 - [ ] Propostas com AI (geração completa)
 - [ ] Contratos com versionamento + diff visual
-- [ ] Financeiro (Asaas)
 - [ ] Integração Fathom (reuniões)
 - [ ] Integração Cal.com
-- [ ] Integração Asaas
+- [ ] Integração Asaas (vincular invoices com Asaas)
 
 ---
 
@@ -416,7 +493,9 @@ Caddy config: `/root/pandora-skills/deploy/docs-site/Caddyfile`
 
 - **Mensagens de WhatsApp** são inseridas no Supabase pelo **N8N** na tabela vetorial `public.documents`. **Não duplicar essa ingestão.** A conexão uazapi (`pandora.uazapi.com`) é exclusivamente para **enviar** mensagens. Para ler conversas, consulte `public.documents`.
 
-- **N8N** existe no VPS mas o Pandora OS **não depende dele**. Todos os webhooks são API routes do próprio Next.js. N8N fica para automações pontuais.
+- **N8N** existe no VPS mas o Pandora OS **não depende dele**. Todos os webhooks são API routes do próprio Next.js. N8N fica para automações pontuais. Exception: N8N deve chamar `/api/agents/scan` (1h) e `/api/agents/ai-scan` (6h) com `Authorization: Bearer $AGENT_SECRET`.
+
+- **AGENT_SECRET**: variável de ambiente que protege os endpoints de agentes (`/api/agents/*`). Definida em `.env.local`. Necessário configurar na produção.
 
 - **Supabase** é o único banco. Vetores do WhatsApp já estão lá em base separada.
 

@@ -226,6 +226,15 @@
 }
 .dv-article strong { font-weight: 600; color: var(--pandora-ink-800); }
 
+/* ── Mermaid diagrams no viewer ── */
+.dv-article .pda-mermaid-wrap {
+  background: var(--pandora-ink-25, #faf8ff);
+  border-color: var(--pandora-ink-100);
+}
+.dv-article .pda-mermaid-wrap svg {
+  font-family: "Sora", sans-serif;
+}
+
 /* ── Status banner no viewer ── */
 .dv-status-bar {
   background: var(--pandora-violet-50);

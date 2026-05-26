@@ -1,8 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import ReactMarkdown from "react-markdown";
-import remarkGfm from "remark-gfm";
+import MarkdownRenderer from "./MarkdownRenderer";
 import { Download, FileText, Copy, Check } from "lucide-react";
 import { applyDynamicTokens } from "@/lib/docs";
 import { exportToPdf, exportToDocx } from "@/lib/export";
@@ -82,9 +81,7 @@ export default function DocViewerClient({ id, type, title, subtitle, content, st
 
       <div className="dv-body">
         <article className="dv-article" ref={articleRef}>
-          <ReactMarkdown remarkPlugins={[remarkGfm]}>
-            {processedContent}
-          </ReactMarkdown>
+          <MarkdownRenderer>{processedContent}</MarkdownRenderer>
         </article>
       </div>
     </>
