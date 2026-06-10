@@ -85,7 +85,7 @@ export interface AIWithToolsResult {
 }
 
 /**
- * Chama o modelo com suporte a tool use (formato Anthropic via OpenRouter).
+ * Chama o modelo com suporte a tool use (formato OpenAI, compatível com todos os modelos do OpenRouter).
  */
 export async function aiWithTools(
   messages: AIMessage[],
@@ -95,7 +95,17 @@ export async function aiWithTools(
   const apiKey = process.env.OPENROUTER_API_KEY;
   if (!apiKey) throw new Error("OPENROUTER_API_KEY não configurada");
 
-  const model = options.model ?? process.env.OPENROUTER_DEFAULT_MODEL ?? "anthropic/claude-sonnet-4.5";
+  const model = options.model ?? process.env.OPENROUTER_DEFAULT_MODEL ?? "moonshotai/kimi-k2";
+
+  // Converte para formato OpenAI (compatível com todos os modelos no OpenRouter)
+  const openaiTools = tools.map((t) => ({
+    type: "function",
+    function: {
+      name: t.name,
+      description: t.description,
+      parameters: t.input_schema,
+    },
+  }));
 
   const res = await fetch(OPENROUTER_URL, {
     method: "POST",
@@ -108,7 +118,7 @@ export async function aiWithTools(
     body: JSON.stringify({
       model,
       messages,
-      tools,
+      tools: openaiTools,
       temperature: options.temperature ?? 0.4,
       max_tokens: options.max_tokens,
     }),
@@ -122,18 +132,19 @@ export async function aiWithTools(
   const data = await res.json();
   const message = data.choices[0].message;
   const toolCalls: ToolCall[] = [];
-  let textContent = "";
 
-  if (Array.isArray(message.content)) {
-    for (const block of message.content) {
-      if (block.type === "text") textContent += block.text;
-      if (block.type === "tool_use") {
-        toolCalls.push({ id: block.id, name: block.name, input: block.input });
-      }
-    }
-  } else {
-    textContent = message.content ?? "";
+  // OpenRouter retorna tool calls em formato OpenAI: message.tool_calls[].function
+  for (const tc of message.tool_calls ?? []) {
+    toolCalls.push({
+      id: tc.id ?? tc.function?.name,
+      name: tc.function?.name,
+      input: typeof tc.function?.arguments === "string"
+        ? JSON.parse(tc.function.arguments)
+        : (tc.function?.arguments ?? {}),
+    });
   }
+
+  const textContent = typeof message.content === "string" ? message.content : "";
 
   return {
     content: textContent,
