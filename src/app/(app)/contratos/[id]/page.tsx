@@ -40,6 +40,7 @@ export default async function ContratoEditorPage({
       backHref="/contratos"
       backLabel="Contratos"
       apiPath="/api/contracts"
+      duplicateHref={`/contratos/novo?source=${data.id}&mode=duplicate`}
     />
   );
 }

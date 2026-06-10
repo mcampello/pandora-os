@@ -4,14 +4,17 @@ import { useEffect, useState } from "react";
 import { useParams } from "next/navigation";
 import Link from "next/link";
 import { supabaseBrowser } from "@/lib/supabase-browser";
+import TaskBell from "@/components/TaskBell";
 import type { Contact, Interaction, AnalysisSnapshot, OpportunityChannel, OpportunityConfidence, ContactCategory, OpportunityWithContact } from "@/lib/types";
 import { STATUS_LABEL, STATUS_COLOR, timeAgo } from "@/lib/opportunities";
 import {
   ArrowLeft, Mail, Phone, Link2, Globe, Building2, Briefcase,
   Sparkles, TrendingUp, RefreshCw, ExternalLink, Pencil, Check, X,
   History, ChevronDown, ChevronUp, Zap, CheckCircle2, Clock, MessageSquarePlus, Download,
-  CalendarDays, Video, FileText,
+  CalendarDays, Video, FileText, MessageCircle, CheckSquare,
 } from "lucide-react";
+import type { Task } from "@/lib/tasks";
+import { useChatPanel } from "@/lib/chat-panel-context";
 
 interface IntelResult {
   snapshot: AnalysisSnapshot;
@@ -22,6 +25,7 @@ export default function ContatoPage() {
   const params = useParams<{ id: string }>();
   const id = params.id;
   const supabase = supabaseBrowser();
+  const { openPanel } = useChatPanel();
 
   const [contact, setContact]     = useState<Contact | null>(null);
   const [interactions, setInts]   = useState<Interaction[]>([]);
@@ -47,10 +51,21 @@ export default function ContatoPage() {
   const [updateSaving, setUpdateSaving] = useState(false);
   const [update, setUpdate] = useState({ subject: "", content: "", type: "note", occurred_at: new Date().toISOString().slice(0, 16) });
   const [contactOpps, setContactOpps] = useState<OpportunityWithContact[]>([]);
+  const [contactTasks, setContactTasks] = useState<Task[]>([]);
 
   async function loadOpportunities() {
     const res = await fetch(`/api/opportunities?contact_id=${id}`);
     if (res.ok) setContactOpps((await res.json()) as OpportunityWithContact[]);
+  }
+
+  async function loadTasks() {
+    const res = await fetch(`/api/tasks?entity_id=${id}&status=open`);
+    if (res.ok) setContactTasks((await res.json()) as Task[]);
+  }
+
+  async function updateTaskStatus(taskId: string, status: "done" | "dismissed") {
+    await fetch(`/api/tasks/${taskId}`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ status }) });
+    await loadTasks();
   }
 
   async function load() {
@@ -68,6 +83,7 @@ export default function ContatoPage() {
       .order("created_at", { ascending: false }).limit(20);
     setSnapshots((snaps as AnalysisSnapshot[]) ?? []);
     await loadOpportunities();
+    await loadTasks();
   }
 
   function startEdit() {
@@ -371,6 +387,7 @@ export default function ContatoPage() {
           <button onClick={() => { setOppForm((v) => !v); setUpdateForm(false); }} className="pda-btn pda-btn-ghost">
             <Zap size={14} /> Criar oportunidade
           </button>
+          <TaskBell />
         </div>
       </header>
 
@@ -693,6 +710,46 @@ export default function ContatoPage() {
                 </ul>
               )}
             </div>
+
+            {/* Tarefas vinculadas */}
+            <div className="pda-card" style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+              <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                <CheckSquare size={14} color="var(--pandora-violet-500)" />
+                <span className="pda-eyebrow" style={{ flex: 1 }}>Tarefas</span>
+                {contactTasks.length > 0 && (
+                  <span style={{ fontSize: 11, fontFamily: "var(--font-mono)", color: "var(--pandora-ink-400)" }}>
+                    {contactTasks.length}
+                  </span>
+                )}
+              </div>
+              {contactTasks.length === 0 ? (
+                <p style={{ fontSize: 12, color: "var(--pandora-ink-400)", margin: 0 }}>Nenhuma tarefa aberta.</p>
+              ) : (
+                <div style={{ display: "flex", flexDirection: "column", gap: 0 }}>
+                  {contactTasks.map((task, i) => {
+                    const dotColor = task.priority === "critical" ? "#dc2626" : task.priority === "high" ? "#d97706" : task.priority === "medium" ? "#7A1CB5" : "#9ca3af";
+                    return (
+                      <div key={task.id} style={{
+                        display: "flex", alignItems: "flex-start", gap: 8,
+                        padding: "7px 0",
+                        borderBottom: i < contactTasks.length - 1 ? "1px solid var(--pandora-ink-100)" : "none",
+                      }}>
+                        <div style={{ width: 6, height: 6, borderRadius: "50%", background: dotColor, marginTop: 5, flexShrink: 0 }} />
+                        <span style={{ fontSize: 12, color: "var(--pandora-ink-700)", lineHeight: 1.4, flex: 1 }}>{task.title}</span>
+                        <div style={{ display: "flex", gap: 4, flexShrink: 0 }}>
+                          <button onClick={() => updateTaskStatus(task.id, "done")} title="Concluir" style={{ background: "none", border: "none", cursor: "pointer", padding: 2, color: "var(--color-success)", lineHeight: 1 }}>
+                            <Check size={12} />
+                          </button>
+                          <button onClick={() => updateTaskStatus(task.id, "dismissed")} title="Dispensar" style={{ background: "none", border: "none", cursor: "pointer", padding: 2, color: "var(--pandora-ink-400)", lineHeight: 1 }}>
+                            <X size={12} />
+                          </button>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
           </div>
 
           {/* ── COLUNA DIREITA ── */}
@@ -720,6 +777,21 @@ export default function ContatoPage() {
                   <RefreshCw size={14} style={refreshingContact ? { animation: "spin 1s linear infinite" } : undefined} />
                   {refreshingContact ? "Atualizando…" : "Atualizar contato"}
                 </button>
+                {contact?.phone && (
+                  <button
+                    type="button"
+                    onClick={() => openPanel({
+                      contactId: id,
+                      contactPhone: contact.phone!,
+                      contactName: contact.name,
+                    })}
+                    title="Abrir conversa WhatsApp"
+                    className="pda-btn pda-btn-ghost"
+                    style={{ justifyContent: "center", gap: 6, color: "var(--pandora-green-400)", borderColor: "rgba(45,212,160,0.3)", flexShrink: 0 }}
+                  >
+                    <MessageCircle size={14} />
+                  </button>
+                )}
               </div>
 
               {updateForm && (
@@ -762,6 +834,40 @@ export default function ContatoPage() {
               )}
             </div>
 
+            {/* O que está rolando */}
+            {latest?.status && (
+              <div className="pda-card">
+                <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 10 }}>
+                  <Clock size={14} color="var(--pandora-violet-500)" />
+                  <span className="pda-eyebrow">O que está rolando</span>
+                </div>
+                <p style={{ fontSize: 14, color: "var(--pandora-violet-900)", lineHeight: 1.6, margin: 0 }}>{latest.status}</p>
+              </div>
+            )}
+
+            {/* Próximos passos */}
+            {latest?.next_steps && latest.next_steps.length > 0 && (
+              <div className="pda-card">
+                <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 12 }}>
+                  <CheckCircle2 size={14} color="var(--pandora-green-400, #2DD4A0)" />
+                  <span className="pda-eyebrow">Próximos passos</span>
+                </div>
+                <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                  {latest.next_steps.map((step, i) => (
+                    <div key={i} style={{ display: "flex", gap: 10, alignItems: "flex-start" }}>
+                      <span style={{
+                        width: 20, height: 20, borderRadius: "50%", flexShrink: 0,
+                        background: "var(--pandora-violet-50)", color: "var(--pandora-violet-600)",
+                        fontFamily: "var(--font-display)", fontSize: 10, fontWeight: 600,
+                        display: "flex", alignItems: "center", justifyContent: "center",
+                      }}>{i + 1}</span>
+                      <span style={{ fontSize: 13, color: "var(--pandora-ink-700)", lineHeight: 1.5 }}>{step}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
             {/* Quem é */}
             <div className="pda-card">
               <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 12 }}>
@@ -789,40 +895,6 @@ export default function ContatoPage() {
                 <p style={{ fontSize: 13, color: "var(--pandora-ink-400)", margin: 0 }}>Clique em <strong>Atualizar contato</strong> para gerar um resumo com base nas conversas.</p>
               )}
             </div>
-
-            {/* Próximos passos */}
-            {latest?.next_steps && latest.next_steps.length > 0 && (
-              <div className="pda-card">
-                <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 12 }}>
-                  <CheckCircle2 size={14} color="var(--pandora-green-400, #2DD4A0)" />
-                  <span className="pda-eyebrow">Próximos passos</span>
-                </div>
-                <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-                  {latest.next_steps.map((step, i) => (
-                    <div key={i} style={{ display: "flex", gap: 10, alignItems: "flex-start" }}>
-                      <span style={{
-                        width: 20, height: 20, borderRadius: "50%", flexShrink: 0,
-                        background: "var(--pandora-violet-50)", color: "var(--pandora-violet-600)",
-                        fontFamily: "var(--font-display)", fontSize: 10, fontWeight: 600,
-                        display: "flex", alignItems: "center", justifyContent: "center",
-                      }}>{i + 1}</span>
-                      <span style={{ fontSize: 13, color: "var(--pandora-ink-700)", lineHeight: 1.5 }}>{step}</span>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
-
-            {/* O que está rolando */}
-            {latest?.status && (
-              <div className="pda-card">
-                <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 10 }}>
-                  <Clock size={14} color="var(--pandora-violet-500)" />
-                  <span className="pda-eyebrow">O que está rolando</span>
-                </div>
-                <p style={{ fontSize: 14, color: "var(--pandora-violet-900)", lineHeight: 1.6, margin: 0 }}>{latest.status}</p>
-              </div>
-            )}
 
             {/* Timeline de relacionamento */}
             {timeline.length > 0 && (

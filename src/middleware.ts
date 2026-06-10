@@ -26,7 +26,8 @@ export async function middleware(request: NextRequest) {
     url.pathname === "/login" ||
     url.pathname.startsWith("/api/") ||
     url.pathname.startsWith("/view/") ||
-    url.pathname.startsWith("/portal/");
+    url.pathname.startsWith("/portal/") ||
+    url.pathname.startsWith("/cadastro/");
 
   if (!user && !isPublic) {
     url.pathname = "/login";

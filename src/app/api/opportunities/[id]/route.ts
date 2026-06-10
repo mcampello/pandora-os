@@ -64,14 +64,8 @@ export async function PATCH(
   if (body.status !== undefined) {
     const newStatus = body.status as OpportunityStatus;
     patch.status = newStatus;
-    if (newStatus === "qualified" && !existing.qualified_at) {
+    if (newStatus === "em_contato" && !existing.qualified_at) {
       patch.qualified_at = new Date().toISOString();
-    }
-    if (newStatus === "converted") {
-      const contactId = body.contact_id !== undefined ? body.contact_id : existing.contact_id;
-      if (!contactId) {
-        return NextResponse.json({ error: "contact_id é obrigatório para status converted" }, { status: 400 });
-      }
     }
   }
 

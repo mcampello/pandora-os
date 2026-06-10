@@ -72,4 +72,25 @@ export const uaz = {
       method: "POST",
       body: JSON.stringify({ number, text }),
     }),
+
+  // mediatype: "image" | "video" | "document"
+  sendMedia: (token: string, number: string, mediaBase64: string, mediatype: string, caption?: string, filename?: string) =>
+    call("/send/media", token, {
+      method: "POST",
+      body: JSON.stringify({ number, mediatype, media: mediaBase64, caption, filename }),
+    }),
+
+  // ptt: true = push-to-talk (voice message)
+  sendAudio: (token: string, number: string, audioBase64: string) =>
+    call("/send/audio", token, {
+      method: "POST",
+      body: JSON.stringify({ number, audio: audioBase64, ptt: true }),
+    }),
+
+  // Returns { base64?: string; mimetype?: string } — may fail if message expired from cache
+  downloadMedia: (token: string, messageId: string, chatId: string) =>
+    call<{ base64?: string; mimetype?: string; buffer?: string }>("/message/download", token, {
+      method: "POST",
+      body: JSON.stringify({ messageId, chatId }),
+    }),
 };

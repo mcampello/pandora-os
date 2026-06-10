@@ -7,7 +7,7 @@ import { useRouter, usePathname } from "next/navigation";
 import {
   LayoutDashboard, Building2, Users, Zap, FileText, ScrollText,
   ClipboardList, Wallet, Settings, ChevronLeft, ChevronRight,
-  ChevronDown, LogOut, CheckSquare,
+  ChevronDown, LogOut, CheckSquare, Bot,
 } from "lucide-react";
 import { clsx } from "clsx";
 import { supabaseBrowser } from "@/lib/supabase-browser";
@@ -78,8 +78,8 @@ export default function Sidebar() {
         <Image
           src="/pandora_ico.svg"
           alt="Pandora"
-          width={collapsed ? 36 : 28}
-          height={collapsed ? 36 : 28}
+          width={collapsed ? 32 : 28}
+          height={collapsed ? 32 : 28}
           className="pda-brand-logo"
           priority
           unoptimized
@@ -97,6 +97,16 @@ export default function Sidebar() {
       </div>
 
       <ul className="pda-nav" style={{ marginTop: 8 }}>
+        <li>
+          <Link
+            href="/agente"
+            className={clsx("pda-nav-item", pathname.startsWith("/agente") && "active")}
+            title={collapsed ? "Agente" : undefined}
+          >
+            <Bot size={16} />
+            <span className="pda-nav-label">Agente</span>
+          </Link>
+        </li>
         <li>
           <Link
             href="/"

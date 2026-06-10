@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { supabaseServer } from "@/lib/supabase-server";
+import { supabasePublic } from "@/lib/supabase-admin";
 
 // Sincroniza contatos a partir de mensagens 1:1 (não-grupo) na tabela documents.
 // Para cada chatId único, identifica o "outro lado" (não o owner) e cria contato + client prospect.
@@ -27,10 +28,12 @@ export async function POST() {
   const pageSize = 1000;
   let offset = 0;
 
+  const publicDb = supabasePublic();
   while (true) {
-    const { data, error } = await supabase
+    const { data, error } = await publicDb
       .from("documents").select("metadata")
       .like("metadata->>chatId", "%@s.whatsapp.net")
+      .order("id", { ascending: true })
       .range(offset, offset + pageSize - 1);
 
     if (error) return NextResponse.json({ error: error.message }, { status: 500 });
@@ -50,7 +53,10 @@ export async function POST() {
         chats.set(chatId, entry);
       }
       if (name) entry.counts.set(name, (entry.counts.get(name) ?? 0) + 1);
-      if (date > entry.lastDate) entry.lastDate = date;
+      // Normaliza para ISO antes de comparar — o campo date tem dois formatos no banco:
+      // "2026-05-05 09:06" e "2026-05-21T16:14:49.000-03:00"
+      const dateIso = date ? new Date(date).toISOString() : "";
+      if (dateIso && dateIso > entry.lastDate) entry.lastDate = dateIso;
     }
 
     if (data.length < pageSize) break;
@@ -91,7 +97,10 @@ export async function POST() {
 
     if (selectErr) { errors.push(`select ${info.phone}: ${selectErr.message}`); continue; }
 
+    let contactId: string;
+
     if (existing) {
+      contactId = existing.id;
       if (!existing.name || existing.name === info.phone) {
         const { error: updErr } = await supabase.from("contacts").update({ name: bestName }).eq("id", existing.id);
         if (updErr) errors.push(`update ${info.phone}: ${updErr.message}`);
@@ -108,6 +117,7 @@ export async function POST() {
         .single();
 
       if (insErr) { errors.push(`insert contact ${info.phone}: ${insErr.message}`); continue; }
+      contactId = newContact.id;
 
       // Cria client prospect para validação
       const { error: clientErr } = await supabase.from("clients").insert({
@@ -119,6 +129,20 @@ export async function POST() {
 
       created++;
       summary.push({ phone: info.phone, name: bestName, messages: totalMsgs, status: "created" });
+    }
+
+    // Sincroniza last_interaction via marcador wa-sync (delete+insert para garantir data correta)
+    if (info.lastDate) {
+      const extId = `wa-sync-${info.phone}`;
+      await supabase.from("interactions").delete().eq("contact_id", contactId).eq("external_id", extId);
+      await supabase.from("interactions").insert({
+        contact_id: contactId,
+        channel: "whatsapp",
+        type: "message_in",
+        subject: "WhatsApp",
+        external_id: extId,
+        occurred_at: new Date(info.lastDate).toISOString(),
+      });
     }
   }
 

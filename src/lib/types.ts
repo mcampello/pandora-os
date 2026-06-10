@@ -13,6 +13,13 @@ export interface Company {
   industry?: string;
   size?: CompanySize;
   notes?: string;
+  address_street?: string;
+  address_number?: string;
+  address_complement?: string;
+  address_city?: string;
+  address_state?: string;
+  address_zip?: string;
+  responsible_contact_id?: string;
   created_at: string;
   updated_at: string;
 }
@@ -61,6 +68,10 @@ export interface Contact {
   notes?: string;
   ai_summary?: string;
   ai_summary_updated_at?: string;
+  // Timestamps reais de último contato por canal (atualizados por trigger)
+  last_whatsapp_at?: string;
+  last_email_at?: string;
+  last_meeting_at?: string;
   created_at: string;
   updated_at: string;
 }
@@ -98,7 +109,7 @@ export interface Client {
 // Oportunidades
 export type OpportunityChannel    = 'whatsapp' | 'email' | 'calcom' | 'manual' | 'group';
 export type OpportunityConfidence = 'very_high' | 'high' | 'medium' | 'low';
-export type OpportunityStatus     = 'new' | 'qualified' | 'dismissed' | 'converted';
+export type OpportunityStatus     = 'nova' | 'em_contato' | 'proposta' | 'contrato' | 'operacional' | 'perdida';
 
 export interface Opportunity {
   id: string;
@@ -140,6 +151,7 @@ export interface Proposal {
   id: string;
   client_id?: string;
   opportunity_id?: string;
+  company_id?: string;
   proposal_group_id: string;
   version: number;
   title: string;
@@ -166,6 +178,7 @@ export interface Contract {
   id: string;
   client_id?: string;
   opportunity_id?: string;
+  company_id?: string;
   contract_group_id: string;
   version: number;
   title: string;
@@ -178,6 +191,8 @@ export interface Contract {
   ends_at?: string;
   signature_provider?: string;
   signature_external_id?: string;
+  billing_type?: 'mensal' | 'fechado' | null;
+  billing_day?: number | null;
   created_at: string;
   updated_at: string;
 }
@@ -185,6 +200,45 @@ export interface Contract {
 export interface ContractWithRefs extends Contract {
   client?: Pick<Client, "id" | "company_name" | "status"> | null;
   opportunity?: Pick<Opportunity, "id" | "title" | "status"> | null;
+}
+
+// Financeiro — NFs e cobranças
+export type InvoiceStatus = 'pendente' | 'emitida' | 'paga' | 'cancelada';
+
+export interface Invoice {
+  id: string;
+  contract_id?: string;
+  company_id?: string;
+  client_id?: string;
+  month: string;       // ISO date, always 1st of month
+  number?: string;
+  amount: number;
+  status: InvoiceStatus;
+  due_date?: string;
+  issued_at?: string;
+  paid_at?: string;
+  asaas_id?: string;
+  notes?: string;
+  created_at: string;
+  updated_at: string;
+}
+
+// Financeiro — Pessoas do contrato
+export interface ContractContact {
+  id: string;
+  contract_id: string;
+  contact_id: string;
+  role?: string;
+  contact?: Pick<Contact, 'id' | 'name' | 'email' | 'phone' | 'role'>;
+  created_at: string;
+}
+
+// Financeiro — Contrato enriquecido para listagem
+export interface ContractFinanceiro extends Contract {
+  company?: Pick<Company, 'id' | 'name' | 'cnpj'> | null;
+  client?: Pick<Client, 'id' | 'company_name' | 'status' | 'monthly_fee'> | null;
+  pending_invoices: number;
+  total_invoiced: number;
 }
 
 // Snapshots de análise AI por contato
@@ -251,6 +305,53 @@ export interface InitiativeTask {
   assignee?: string;
   due_date?: string;
   sort_order: number;
+  created_at: string;
+  updated_at: string;
+}
+
+// Agente de Operações — ações propostas (não aplicadas sem aprovação)
+export type ProposedActionType =
+  | 'create_initiative'
+  | 'create_task'
+  | 'update_task'
+  | 'update_initiative'
+  | 'add_deliverable';
+
+export interface ProposedAction {
+  id: string;
+  type: ProposedActionType;
+  description: string;
+  reasoning: string;
+  payload: Record<string, unknown>;
+}
+
+// Financeiro — Custos por contrato (serviços pagos pela Pandora em nome do cliente)
+export type CostRecurrence = 'mensal' | 'anual' | 'pontual';
+
+export interface ContractCost {
+  id: string;
+  contract_id: string;
+  name: string;
+  category?: string;
+  amount: number;
+  currency: string;
+  recurrence: CostRecurrence;
+  notes?: string;
+  active: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
+// Financeiro — Despesas da Pandora Tech (ferramentas, subscriptions, custos fixos)
+export interface CompanyExpense {
+  id: string;
+  name: string;
+  category?: string;
+  amount: number;
+  currency: string;
+  recurrence: CostRecurrence;
+  notes?: string;
+  active: boolean;
   created_at: string;
   updated_at: string;
 }

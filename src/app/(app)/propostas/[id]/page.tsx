@@ -22,11 +22,15 @@ export default async function PropostaEditorPage({
 
   const { data } = await supabase
     .from("proposals")
-    .select("id, title, content_md, status, viewer_url")
+    .select("id, title, content_md, status, viewer_url, opportunity_id, client_id")
     .eq("id", id)
     .maybeSingle();
 
   if (!data) notFound();
+
+  const contractParams = new URLSearchParams({ proposal_id: data.id });
+  if (data.opportunity_id) contractParams.set("opportunity_id", data.opportunity_id);
+  if (data.client_id) contractParams.set("client_id", data.client_id);
 
   return (
     <DocEditor
@@ -40,6 +44,12 @@ export default async function PropostaEditorPage({
       backHref="/propostas"
       backLabel="Propostas"
       apiPath="/api/proposals"
+      nextAction={{
+        condition: "accepted",
+        message: "Proposta aceita — pronta para virar contrato.",
+        label: "Gerar contrato",
+        href: `/contratos/novo?${contractParams.toString()}`,
+      }}
     />
   );
 }

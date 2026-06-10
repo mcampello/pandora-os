@@ -1,10 +1,17 @@
 import { createClient } from "@supabase/supabase-js";
 
-// Bypass de RLS — use apenas em Server Components e API routes de confiança.
-// Nunca exponha a service role key no client-side.
-export function supabaseAdmin() {
+function makeAdminClient(schema: string) {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL!;
-  const key = process.env.SUPABASE_SERVICE_ROLE_KEY!;
-  if (!key) throw new Error("SUPABASE_SERVICE_ROLE_KEY não configurada");
-  return createClient(url, key, { auth: { persistSession: false } });
+  // Falls back to anon key when service role key is absent.
+  const key = process.env.SUPABASE_SERVICE_ROLE_KEY?.trim() || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
+  return createClient(url, key, { db: { schema }, auth: { persistSession: false } });
+}
+
+export function supabaseAdmin() {
+  return makeAdminClient(process.env.NEXT_PUBLIC_SUPABASE_SCHEMA || "public");
+}
+
+// Always queries public schema — use for N8N-managed tables (documents, groups, participants).
+export function supabasePublic() {
+  return makeAdminClient("public");
 }

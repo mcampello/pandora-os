@@ -1,10 +1,5 @@
-import Sidebar from "@/components/Sidebar";
+import AppShell from "@/components/AppShell";
 
 export default function AppLayout({ children }: { children: React.ReactNode }) {
-  return (
-    <div style={{ display: "flex", height: "100vh", overflow: "hidden" }}>
-      <Sidebar />
-      <div className="pda-main">{children}</div>
-    </div>
-  );
+  return <AppShell>{children}</AppShell>;
 }

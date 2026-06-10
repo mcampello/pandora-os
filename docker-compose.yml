@@ -10,7 +10,7 @@ services:
     env_file:
       - .env.local
     environment:
-      - NODE_ENV=development
+      - NODE_ENV=production
       - HOSTNAME=0.0.0.0
     networks:
       - docs-site_docs_net

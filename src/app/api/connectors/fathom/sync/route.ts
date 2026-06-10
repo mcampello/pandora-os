@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { supabaseServer } from "@/lib/supabase-server";
 import { fetchCallsSince, fetchCallSummary, formatSummaryPT, isSkippable } from "@/lib/fathom";
+import { upsertTask } from "@/lib/tasks";
 
 const MY_EMAIL = "mario@campello.me";
 
@@ -97,6 +98,20 @@ export async function POST() {
     });
 
     stats.interactions_created++;
+
+    // Tarefa de follow-up se a reunião foi ontem ou antes
+    const meetingAge = Date.now() - new Date(call.started_at).getTime();
+    if (meetingAge >= 24 * 3600_000) {
+      await upsertTask(supabase, {
+        title: `Follow-up da reunião com ${attendees[0]?.name ?? primary.email} (Fathom)`,
+        priority: "high",
+        source: "rule",
+        rule_key: "meeting_no_followup_24h",
+        entity_type: "contact",
+        entity_id: contactId,
+        dedup_key: `fathom_followup_${externalId}`,
+      });
+    }
   }
 
   // Atualiza last_sync_at

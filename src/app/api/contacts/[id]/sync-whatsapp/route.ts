@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { supabaseServer } from "@/lib/supabase-server";
+import { supabasePublic } from "@/lib/supabase-admin";
 
 // POST /api/contacts/[id]/sync-whatsapp
 // Imports WhatsApp messages from public.documents as a single "conversation" interaction per day.
@@ -16,11 +17,13 @@ export async function POST(_req: NextRequest, { params }: { params: Promise<{ id
   if (!contact.phone) return NextResponse.json({ error: "contact has no phone" }, { status: 400 });
 
   // Normalize phone → JID format
-  const digits = contact.phone.replace(/\D/g, "");
+  // Garante código do país 55 (Brasil): números sem ele teriam 10-11 dígitos
+  let digits = contact.phone.replace(/\D/g, "");
+  if (digits.length <= 11) digits = `55${digits}`;
   const jid = `${digits}@s.whatsapp.net`;
 
   // Fetch all documents for this chat (private conversation)
-  const { data: docs } = await supabase
+  const { data: docs } = await supabasePublic()
     .from("documents")
     .select("id, content, metadata")
     .eq("metadata->>chatId", jid)

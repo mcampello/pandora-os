@@ -4,9 +4,10 @@ import { Suspense, useCallback, useEffect, useMemo, useState } from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { useRouter, useSearchParams } from "next/navigation";
+import TaskBell from "@/components/TaskBell";
 import {
-  Plus, Search, X, ExternalLink, Copy, Check, Eye, EyeOff,
-  Zap, FileText,
+  Plus, Search, X, ExternalLink, Copy, Check, FileText,
+  Sparkles,
 } from "lucide-react";
 import type { ProposalWithRefs, ProposalStatus } from "@/lib/types";
 import {
@@ -23,11 +24,12 @@ interface FormState {
   value: string;
   client_id: string;
   opportunity_id: string;
+  company_id: string;
   status: ProposalStatus;
 }
 
 const emptyForm = (): FormState => ({
-  title: "", content_md: "", value: "", client_id: "", opportunity_id: "", status: "draft",
+  title: "", content_md: "", value: "", client_id: "", opportunity_id: "", company_id: "", status: "draft",
 });
 
 function PropostasInner() {
@@ -51,6 +53,7 @@ function PropostasInner() {
   const [generating, setGenerating] = useState(false);
   const [copied, setCopied] = useState<string | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
+  const [companiesList, setCompaniesList] = useState<{ id: string; name: string }[]>([]);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -69,6 +72,11 @@ function PropostasInner() {
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
   }, [drawerOpen]);
+
+  useEffect(() => {
+    if (!drawerOpen || companiesList.length > 0) return;
+    fetch("/api/companies").then(r => r.ok ? r.json() : []).then(setCompaniesList);
+  }, [drawerOpen, companiesList.length]);
 
   const clientOptions = useMemo(() => {
     const seen = new Set<string>();
@@ -97,12 +105,8 @@ function PropostasInner() {
     return acc;
   }, {}), [proposals]);
 
-  function openCreate() {
-    setEditing(null);
-    setSaveError(null);
-    setPreview(false);
-    setForm({ ...emptyForm(), opportunity_id: oppId, client_id: clientId });
-    setDrawerOpen(true);
+  function goToNewProposal() {
+    router.push("/propostas/nova");
   }
 
   function openEdit(p: ProposalWithRefs) {
@@ -115,13 +119,14 @@ function PropostasInner() {
       value: p.value != null ? String(p.value) : "",
       client_id: p.client_id ?? "",
       opportunity_id: p.opportunity_id ?? "",
+      company_id: p.company_id ?? "",
       status: p.status,
     });
     setDrawerOpen(true);
   }
 
   async function saveForm() {
-    if (!form.title.trim()) return;
+    if (!form.title.trim() || !form.company_id) return;
     setSaving(true);
     setSaveError(null);
     const payload = {
@@ -130,6 +135,7 @@ function PropostasInner() {
       value: form.value ? parseFloat(form.value) : null,
       client_id: form.client_id || null,
       opportunity_id: form.opportunity_id || null,
+      company_id: form.company_id,
       status: form.status,
     };
 
@@ -201,9 +207,10 @@ function PropostasInner() {
           <span className="pda-chip">{proposals.length}</span>
         </div>
         <div className="pda-topbar-right">
-          <button type="button" className="pda-btn" onClick={openCreate}>
-            <Plus size={14} /> Nova
+          <button type="button" className="pda-btn" onClick={goToNewProposal}>
+            <Sparkles size={14} /> Nova com IA
           </button>
+          <TaskBell />
         </div>
       </header>
 
@@ -260,7 +267,7 @@ function PropostasInner() {
                 : "Crie a primeira proposta ou vincule a uma oportunidade."}
             </div>
             <div style={{ display: "flex", gap: 8 }}>
-              <button type="button" className="pda-btn" onClick={openCreate}><Plus size={14} /> Nova proposta</button>
+              <button type="button" className="pda-btn" onClick={goToNewProposal}><Sparkles size={14} /> Nova proposta com IA</button>
               {oppId && (
                 <button type="button" className="pda-btn pda-btn-ghost" onClick={() => router.push("/propostas")}><X size={14} /> Ver todas</button>
               )}
@@ -306,6 +313,17 @@ function PropostasInner() {
                             </button>
                           </>
                         )}
+                        {p.status === "accepted" && (
+                          <a
+                            href={`/contratos/novo?proposal_id=${p.id}${p.opportunity_id ? `&opportunity_id=${p.opportunity_id}` : ""}${p.client_id ? `&client_id=${p.client_id}` : ""}`}
+                            className="pda-btn pda-btn-ghost"
+                            style={{ fontSize: 11, padding: "3px 8px", textDecoration: "none", color: "var(--pandora-green-400)", borderColor: "rgba(45,212,160,0.3)" }}
+                            title="Gerar contrato a partir desta proposta"
+                            onClick={e => e.stopPropagation()}
+                          >
+                            → Contrato
+                          </a>
+                        )}
                       </div>
                     </td>
                   </tr>
@@ -316,15 +334,15 @@ function PropostasInner() {
         )}
       </div>
 
-      {/* Drawer */}
-      {drawerOpen && (
+      {/* Drawer de edição rápida (somente para propostas existentes) */}
+      {drawerOpen && editing && (
         <>
           <div className="pda-drawer-backdrop" onClick={() => setDrawerOpen(false)} aria-hidden />
-          <aside className="pda-drawer" style={{ width: "min(680px, 100vw)" }} role="dialog" aria-label={editing ? "Editar proposta" : "Nova proposta"}>
+          <aside className="pda-drawer" style={{ width: "min(680px, 100vw)" }} role="dialog" aria-label="Editar proposta">
             <div className="pda-drawer-head">
-              <span className="pda-eyebrow">{editing ? "Editar proposta" : "Nova proposta"}</span>
+              <span className="pda-eyebrow">Editar proposta</span>
               <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
-                {editing?.viewer_url && editing.status !== "draft" && (
+                {editing.viewer_url && editing.status !== "draft" && (
                   <a href={editing.viewer_url} target="_blank" rel="noopener noreferrer" className="pda-btn pda-btn-ghost" style={{ fontSize: 12, padding: "5px 10px" }}>
                     <ExternalLink size={12} /> Visualizar
                   </a>
@@ -347,38 +365,17 @@ function PropostasInner() {
                 </Field>
               </div>
 
-              {/* Editor Markdown */}
-              <Field label={
-                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                  <span>Conteúdo (Markdown)</span>
-                  <div style={{ display: "flex", gap: 6 }}>
-                    <button type="button" className="pda-btn pda-btn-ghost" style={{ fontSize: 11, padding: "3px 8px" }} onClick={() => setPreview(v => !v)}>
-                      {preview ? <><EyeOff size={11} /> Editar</> : <><Eye size={11} /> Preview</>}
-                    </button>
-                    <button type="button" className="pda-btn pda-btn-ghost" style={{ fontSize: 11, padding: "3px 8px" }} onClick={generateWithAI} disabled={generating}>
-                      <Zap size={11} /> {generating ? "Gerando…" : "Gerar com AI"}
-                    </button>
-                  </div>
-                </div>
-              }>
-                {preview ? (
-                  <div style={{ border: "1px solid var(--pandora-ink-100)", borderRadius: "var(--radius-sm)", padding: "16px 20px", minHeight: 300, fontSize: 13, lineHeight: 1.7, overflow: "auto", maxHeight: 500, background: "#fff", color: "var(--pandora-ink-800)" }}>
-                    <ReactMarkdown remarkPlugins={[remarkGfm]}>{form.content_md || "_Conteúdo vazio_"}</ReactMarkdown>
-                  </div>
-                ) : (
-                  <textarea
-                    value={form.content_md}
-                    onChange={e => setForm(f => ({ ...f, content_md: e.target.value }))}
-                    style={{ ...inputStyle, height: 320, resize: "vertical", fontFamily: "var(--font-mono)", fontSize: 12, lineHeight: 1.6 }}
-                    placeholder={"# Título da proposta\n\n## Objeto\n\nDescrição do serviço…\n\n## Investimento\n\n| Item | Valor |\n|------|------|\n| … | R$ 0,00 |"}
-                  />
-                )}
+              <Field label="Empresa *">
+                <select value={form.company_id} onChange={e => setForm(f => ({ ...f, company_id: e.target.value }))} style={inputStyle}>
+                  <option value="">— selecione a empresa —</option>
+                  {companiesList.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+                </select>
               </Field>
             </div>
             <div className="pda-drawer-foot" style={{ flexDirection: "column", gap: 10 }}>
               {saveError && <div className="pda-error-banner">{saveError}</div>}
               <div style={{ display: "flex", gap: 8 }}>
-                <button type="button" className="pda-btn" disabled={saving || !form.title.trim()} onClick={saveForm}>
+                <button type="button" className="pda-btn" disabled={saving || !form.title.trim() || !form.company_id} onClick={saveForm}>
                   {saving ? "Salvando…" : "Salvar"}
                 </button>
                 <button type="button" className="pda-btn pda-btn-ghost" onClick={() => setDrawerOpen(false)}>Cancelar</button>

@@ -4,6 +4,7 @@ import { Suspense, useCallback, useEffect, useMemo, useState } from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { useRouter, useSearchParams } from "next/navigation";
+import TaskBell from "@/components/TaskBell";
 import Link from "next/link";
 import {
   Plus, Search, X, ExternalLink, Copy, Check, Eye, EyeOff, ScrollText, Sparkles,
@@ -23,13 +24,14 @@ interface FormState {
   value: string;
   client_id: string;
   opportunity_id: string;
+  company_id: string;
   status: ContractStatus;
   starts_at: string;
   ends_at: string;
 }
 
 const emptyForm = (): FormState => ({
-  title: "", content_md: "", value: "", client_id: "", opportunity_id: "",
+  title: "", content_md: "", value: "", client_id: "", opportunity_id: "", company_id: "",
   status: "draft", starts_at: "", ends_at: "",
 });
 
@@ -53,6 +55,7 @@ function ContratosInner() {
   const [preview, setPreview] = useState(false);
   const [copied, setCopied] = useState<string | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
+  const [companiesList, setCompaniesList] = useState<{ id: string; name: string }[]>([]);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -71,6 +74,11 @@ function ContratosInner() {
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
   }, [drawerOpen]);
+
+  useEffect(() => {
+    if (!drawerOpen || companiesList.length > 0) return;
+    fetch("/api/companies").then(r => r.ok ? r.json() : []).then(setCompaniesList);
+  }, [drawerOpen, companiesList.length]);
 
   const clientOptions = useMemo(() => {
     const seen = new Set<string>();
@@ -117,6 +125,7 @@ function ContratosInner() {
       value: c.value != null ? String(c.value) : "",
       client_id: c.client_id ?? "",
       opportunity_id: c.opportunity_id ?? "",
+      company_id: c.company_id ?? "",
       status: c.status,
       starts_at: c.starts_at ?? "",
       ends_at: c.ends_at ?? "",
@@ -125,7 +134,7 @@ function ContratosInner() {
   }
 
   async function saveForm() {
-    if (!form.title.trim()) return;
+    if (!form.title.trim() || !form.company_id) return;
     setSaving(true);
     setSaveError(null);
     const payload = {
@@ -134,6 +143,7 @@ function ContratosInner() {
       value: form.value ? parseFloat(form.value) : null,
       client_id: form.client_id || null,
       opportunity_id: form.opportunity_id || null,
+      company_id: form.company_id,
       status: form.status,
       starts_at: form.starts_at || null,
       ends_at: form.ends_at || null,
@@ -169,6 +179,7 @@ function ContratosInner() {
           <button type="button" className="pda-btn" onClick={openCreate}>
             <Plus size={14} /> Novo
           </button>
+          <TaskBell />
         </div>
       </header>
 
@@ -269,6 +280,11 @@ function ContratosInner() {
                             </button>
                           </>
                         )}
+                        <button type="button" className="pda-btn pda-btn-ghost" style={{ fontSize: 11, padding: "3px 8px" }}
+                          title="Duplicar contrato"
+                          onClick={() => router.push(`/contratos/novo?source=${c.id}&mode=duplicate`)}>
+                          Duplicar
+                        </button>
                       </div>
                     </td>
                   </tr>
@@ -315,6 +331,13 @@ function ContratosInner() {
                 <input type="date" value={form.ends_at} onChange={e => setForm(f => ({ ...f, ends_at: e.target.value }))} style={inputStyle} />
               </Field>
 
+              <Field label="Empresa *">
+                <select value={form.company_id} onChange={e => setForm(f => ({ ...f, company_id: e.target.value }))} style={inputStyle}>
+                  <option value="">— selecione a empresa —</option>
+                  {companiesList.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+                </select>
+              </Field>
+
               <Field label={
                 <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
                   <span style={{ fontSize: 11, color: "var(--pandora-ink-500)", fontFamily: "var(--font-display)", letterSpacing: "0.06em", textTransform: "uppercase" }}>Conteúdo (Markdown)</span>
@@ -340,7 +363,7 @@ function ContratosInner() {
             <div className="pda-drawer-foot" style={{ flexDirection: "column", gap: 10 }}>
               {saveError && <div className="pda-error-banner">{saveError}</div>}
               <div style={{ display: "flex", gap: 8 }}>
-                <button type="button" className="pda-btn" disabled={saving || !form.title.trim()} onClick={saveForm}>
+                <button type="button" className="pda-btn" disabled={saving || !form.title.trim() || !form.company_id} onClick={saveForm}>
                   {saving ? "Salvando…" : "Salvar"}
                 </button>
                 <button type="button" className="pda-btn pda-btn-ghost" onClick={() => setDrawerOpen(false)}>Cancelar</button>

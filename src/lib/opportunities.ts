@@ -2,17 +2,21 @@ import type { CSSProperties } from "react";
 import type { OpportunityStatus, OpportunityChannel, OpportunityConfidence } from "@/lib/types";
 
 export const STATUS_LABEL: Record<OpportunityStatus, string> = {
-  new: "Nova",
-  qualified: "Qualificada",
-  converted: "Convertida",
-  dismissed: "Descartada",
+  nova:         "Nova",
+  em_contato:   "Em contato",
+  proposta:     "Proposta",
+  contrato:     "Contrato",
+  operacional:  "Operacional",
+  perdida:      "Perdida",
 };
 
 export const STATUS_COLOR: Record<OpportunityStatus, string> = {
-  new: "var(--pandora-violet-600)",
-  qualified: "#0284c7",
-  converted: "#059669",
-  dismissed: "var(--pandora-ink-400)",
+  nova:        "var(--pandora-violet-600)",
+  em_contato:  "#0284c7",
+  proposta:    "#7c3aed",
+  contrato:    "#d97706",
+  operacional: "#059669",
+  perdida:     "var(--pandora-ink-400)",
 };
 
 export const CHANNEL_LABEL: Record<OpportunityChannel, string> = {
@@ -38,23 +42,26 @@ export const CONFIDENCE_COLOR: Record<OpportunityConfidence, string> = {
 };
 
 export const STATUS_COLUMNS: OpportunityStatus[] = [
-  "new",
-  "qualified",
-  "converted",
-  "dismissed",
+  "nova",
+  "em_contato",
+  "proposta",
+  "contrato",
+  "operacional",
+  "perdida",
 ];
 
-/** Próximo status ao avançar no pipeline (null = sem avanço automático). */
 export const NEXT_STATUS: Partial<Record<OpportunityStatus, OpportunityStatus>> = {
-  new: "qualified",
-  qualified: "converted",
+  nova:        "em_contato",
+  em_contato:  "proposta",
+  proposta:    "contrato",
+  contrato:    "operacional",
 };
 
 export function qualifiedAtForStatus(
   status: OpportunityStatus,
   currentQualifiedAt?: string | null
 ): string | undefined {
-  if (status === "qualified" && !currentQualifiedAt) {
+  if (status === "em_contato" && !currentQualifiedAt) {
     return new Date().toISOString();
   }
   return undefined;

@@ -1,7 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
-import { supabaseServer } from "@/lib/supabase-server";
+import { supabaseAdmin } from "@/lib/supabase-admin";
 import { categoryFromSlug } from "@/lib/calcom";
 import type { CalBooking } from "@/lib/calcom";
+import { upsertTask } from "@/lib/tasks";
 
 // Cal.com webhook — sem secret por enquanto
 // Payload ref: https://cal.com/docs/core-features/webhooks#webhook-triggers
@@ -18,7 +19,7 @@ export async function POST(req: NextRequest) {
   const { triggerEvent, payload } = body;
   if (!triggerEvent || !payload) return NextResponse.json({ ok: true }); // ignora pings
 
-  const supabase = await supabaseServer();
+  const supabase = supabaseAdmin();
 
   // Só processa bookings novos e reagendamentos
   if (!["BOOKING_CREATED", "BOOKING_RESCHEDULED"].includes(triggerEvent)) {
@@ -89,6 +90,18 @@ export async function POST(req: NextRequest) {
         },
       });
       stats.interactions_created++;
+
+      // Tarefa: preparar para a reunião (só se for futura)
+      if (isFuture) {
+        await upsertTask(supabase, {
+          title: `Preparar para reunião com ${attendee.name || attendee.email} — ${payload.title}`,
+          priority: "medium",
+          source: "rule",
+          entity_type: "contact",
+          entity_id: contactId,
+          dedup_key: `calcom_prep_${payload.uid}`,
+        });
+      }
     }
   }
 

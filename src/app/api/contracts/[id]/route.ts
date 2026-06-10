@@ -36,16 +36,22 @@ export async function PATCH(
   const body = await req.json();
 
   const isMarkView = Object.keys(body).length === 1 && "viewed_at" in body;
+  console.log("[PATCH /api/contracts] user:", user?.id ?? "null", "id:", id, "isMarkView:", isMarkView);
   if (!user && !isMarkView) {
     return NextResponse.json({ error: "unauthorized" }, { status: 401 });
   }
 
-  const { data: existing } = await supabase
+  const { data: existing, error: existingError } = await supabase
     .from("contracts")
     .select("id, status, signed_at, viewed_at, opportunity_id, client_id")
     .eq("id", id)
     .maybeSingle();
 
+  console.log("[PATCH /api/contracts] existing:", existing?.id ?? "null", "error:", existingError?.message ?? "none");
+  if (existingError) {
+    console.error("[PATCH /api/contracts] query error:", existingError);
+    return NextResponse.json({ error: existingError.message }, { status: 500 });
+  }
   if (!existing) return NextResponse.json({ error: "not found" }, { status: 404 });
 
   const patch: Record<string, unknown> = {};
@@ -58,6 +64,8 @@ export async function PATCH(
   if (body.starts_at !== undefined) patch.starts_at = body.starts_at || null;
   if (body.ends_at !== undefined) patch.ends_at = body.ends_at || null;
   if (body.signature_provider !== undefined) patch.signature_provider = body.signature_provider || null;
+  if (body.billing_type !== undefined) patch.billing_type = body.billing_type || null;
+  if (body.billing_day !== undefined) patch.billing_day = body.billing_day ?? null;
 
   if (body.status !== undefined) {
     patch.status = body.status;
@@ -73,11 +81,11 @@ export async function PATCH(
           .eq("id", oppId)
           .maybeSingle();
 
-        if (opp && opp.status !== "converted") {
+        if (opp && opp.status !== "operacional") {
           let clientId = opp.converted_to_client_id as string | null;
 
           if (!clientId) {
-            const contact = opp.contact as { id: string; name: string; company?: string; company_id?: string } | null;
+            const contact = opp.contact as unknown as { id: string; name: string; company?: string; company_id?: string } | null;
             const { data: client } = await supabase
               .from("clients")
               .insert({
@@ -95,7 +103,7 @@ export async function PATCH(
           if (clientId) {
             await supabase
               .from("opportunities")
-              .update({ status: "converted", converted_to_client_id: clientId })
+              .update({ status: "operacional", converted_to_client_id: clientId })
               .eq("id", opp.id);
             if (!existing.client_id) patch.client_id = clientId;
           }

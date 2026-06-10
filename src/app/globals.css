@@ -127,14 +127,13 @@ html, body {
   flex: 1;
   transition: opacity 200ms cubic-bezier(0.4, 0, 0.2, 1);
 }
-.pda-side.collapsed .pda-brand-label { opacity: 0; pointer-events: none; }
+.pda-side.collapsed .pda-brand-label { display: none; }
 
 .pda-side.collapsed .pda-brand {
   flex-direction: column;
-  align-items: center;
-  gap: 10px;
-  padding: 6px 2px 14px;
-  overflow: visible;
+  justify-content: center;
+  gap: 6px;
+  padding: 8px 0 14px;
 }
 
 .pda-collapse-btn {
@@ -149,7 +148,7 @@ html, body {
   transition: color 120ms;
   flex-shrink: 0;
 }
-.pda-side.collapsed .pda-brand .pda-collapse-toggle { margin-left: 0; color: rgba(255,255,255,0.55); }
+.pda-side.collapsed .pda-brand .pda-collapse-toggle { margin-left: 0; margin-right: 0; color: rgba(255,255,255,0.55); }
 .pda-collapse-btn:hover { color: #fff; }
 
 .pda-nav-section {
@@ -201,9 +200,15 @@ html, body {
 }
 .pda-nav-item svg { width: 16px; height: 16px; stroke-width: 1.5; flex-shrink: 0; }
 .pda-nav-label { transition: opacity 200ms cubic-bezier(0.4, 0, 0.2, 1); }
-.pda-side.collapsed .pda-nav-label { opacity: 0; pointer-events: none; }
+.pda-side.collapsed .pda-nav-label {
+  opacity: 0;
+  pointer-events: none;
+  max-width: 0;
+  overflow: hidden;
+}
 .pda-side.collapsed .pda-nav-item {
   justify-content: center;
+  gap: 0;
   padding-left: 10px;
   padding-right: 10px;
   border-left-width: 0;
@@ -230,13 +235,13 @@ html, body {
 .pda-me { overflow: hidden; transition: opacity 200ms cubic-bezier(0.4, 0, 0.2, 1); flex: 1; min-width: 0; }
 .pda-me-name { font-size: 13px; font-weight: 600; color: #fff; white-space: nowrap; }
 .pda-me-role { font-size: 11px; color: rgba(255,255,255,0.5); white-space: nowrap; }
-.pda-side.collapsed .pda-me { opacity: 0; pointer-events: none; }
+.pda-side.collapsed .pda-me { opacity: 0; pointer-events: none; flex: none; max-height: 0; overflow: hidden; }
 
 .pda-side.collapsed .pda-foot {
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 10px;
+  gap: 8px;
   padding: 12px 8px;
   width: 100%;
   box-sizing: border-box;

@@ -10,8 +10,9 @@ import {
   Upload, FolderOpen, Trash2, Link2,
 } from "lucide-react";
 import {
-  CHANNEL_LABEL, CONFIDENCE_LABEL, CONFIDENCE_COLOR, STATUS_LABEL, STATUS_COLOR,
+  CHANNEL_LABEL, CONFIDENCE_LABEL, CONFIDENCE_COLOR, STATUS_LABEL, STATUS_COLOR, STATUS_COLUMNS,
 } from "@/lib/opportunities";
+import type { OpportunityStatus } from "@/lib/types";
 import type { OpportunityWithContact, Proposal, Contract } from "@/lib/types";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -74,6 +75,10 @@ export default function OportunidadeDetailPage({ params }: { params: Promise<{ i
   const [portal, setPortal]       = useState<Portal | null>(null);
   const [loading, setLoading]     = useState(true);
   const [activeTab, setActiveTab] = useState<Tab>("visao-geral");
+
+  // status picker
+  const [statusPickerOpen, setStatusPickerOpen] = useState(false);
+  const [changingStatus, setChangingStatus]     = useState(false);
 
   // edit mode
   const [editing, setEditing]   = useState(false);
@@ -174,6 +179,21 @@ export default function OportunidadeDetailPage({ params }: { params: Promise<{ i
     });
     if (res.ok) { const d = await res.json(); setOpp(prev => ({ ...prev!, ...d })); setEditing(false); }
     setSaving(false);
+  }
+
+  // ── Status ────────────────────────────────────────────────────────────────
+
+  async function changeStatus(newStatus: OpportunityStatus) {
+    if (!opp || newStatus === opp.status) { setStatusPickerOpen(false); return; }
+    setChangingStatus(true);
+    setStatusPickerOpen(false);
+    const res = await fetch(`/api/opportunities/${id}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ status: newStatus }),
+    });
+    if (res.ok) { const d = await res.json(); setOpp(prev => ({ ...prev!, ...d })); }
+    setChangingStatus(false);
   }
 
   // ── Documents ─────────────────────────────────────────────────────────────
@@ -369,9 +389,62 @@ export default function OportunidadeDetailPage({ params }: { params: Promise<{ i
               <h1 style={{ margin: 0, fontSize: 22, fontFamily: "var(--font-display)", lineHeight: 1.2 }}>{opp.title}</h1>
             )}
             <div style={{ display: "flex", gap: 10, alignItems: "center", marginTop: 8, flexWrap: "wrap" }}>
-              <span style={{ fontSize: 12, background: `${statusColor}18`, color: statusColor, padding: "3px 10px", borderRadius: 99, fontWeight: 600 }}>
-                {STATUS_LABEL[opp.status]}
-              </span>
+              {/* Status picker */}
+              <div style={{ position: "relative" }}>
+                <button
+                  type="button"
+                  onClick={() => setStatusPickerOpen(o => !o)}
+                  disabled={changingStatus}
+                  style={{
+                    fontSize: 12, background: `${statusColor}18`, color: statusColor,
+                    padding: "3px 10px", borderRadius: 99, fontWeight: 600,
+                    border: `1px solid ${statusColor}40`, cursor: "pointer",
+                    display: "flex", alignItems: "center", gap: 4, opacity: changingStatus ? 0.6 : 1,
+                  }}
+                >
+                  {changingStatus ? "..." : STATUS_LABEL[opp.status]}
+                  <svg width="10" height="10" viewBox="0 0 10 10" fill="currentColor">
+                    <path d="M5 7L1 3h8L5 7z"/>
+                  </svg>
+                </button>
+                {statusPickerOpen && (
+                  <>
+                    <div onClick={() => setStatusPickerOpen(false)} style={{ position: "fixed", inset: 0, zIndex: 40 }} />
+                    <div style={{
+                      position: "absolute", top: "calc(100% + 6px)", left: 0, zIndex: 50,
+                      background: "var(--pandora-ink-50, #1a1025)", border: "1px solid var(--pandora-ink-700)",
+                      borderRadius: 10, padding: 6, minWidth: 160,
+                      boxShadow: "0 8px 24px rgba(0,0,0,0.4)",
+                    }}>
+                      {STATUS_COLUMNS.map(s => {
+                        const c = STATUS_COLOR[s];
+                        const active = s === opp.status;
+                        return (
+                          <button
+                            key={s}
+                            type="button"
+                            onClick={() => changeStatus(s)}
+                            style={{
+                              display: "flex", alignItems: "center", gap: 8, width: "100%",
+                              padding: "8px 10px", borderRadius: 7, border: "none", cursor: "pointer",
+                              background: active ? `${c}22` : "transparent",
+                              color: "inherit", fontSize: 13, fontWeight: active ? 600 : 400,
+                            }}
+                          >
+                            <span style={{ width: 8, height: 8, borderRadius: "50%", background: c, flexShrink: 0 }} />
+                            <span style={{ color: active ? c : "inherit" }}>{STATUS_LABEL[s]}</span>
+                            {active && (
+                              <svg style={{ marginLeft: "auto" }} width="12" height="12" viewBox="0 0 12 12" fill={c}>
+                                <path d="M10 3L5 9 2 6l1-1 2 2 4-5 1 1z"/>
+                              </svg>
+                            )}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </>
+                )}
+              </div>
               <span style={{ fontSize: 12, color: CONFIDENCE_COLOR[opp.confidence], fontWeight: 600 }}>
                 {CONFIDENCE_LABEL[opp.confidence]}
               </span>
@@ -414,6 +487,68 @@ export default function OportunidadeDetailPage({ params }: { params: Promise<{ i
           </div>
         )}
       </div>
+
+      {/* ── Pipeline Strip ── */}
+      {(() => {
+        const latestProposal = proposals[0] as (Proposal & { opportunity_id?: string; client_id?: string }) | undefined;
+        const latestContract = contracts[0] as Contract | undefined;
+        const pColor = !latestProposal ? "var(--pandora-ink-600)"
+          : latestProposal.status === "accepted" ? "var(--pandora-green-400)"
+          : latestProposal.status === "rejected" || latestProposal.status === "expired" ? "#ef4444"
+          : latestProposal.status === "sent" || latestProposal.status === "viewed" ? "var(--pandora-violet-400)"
+          : "var(--pandora-ink-500)";
+        const cColor = !latestContract ? "var(--pandora-ink-600)"
+          : latestContract.status === "signed" || latestContract.status === "active" ? "var(--pandora-green-400)"
+          : latestContract.status === "in_review" ? "var(--pandora-violet-400)"
+          : "var(--pandora-ink-500)";
+        const oColor = clientId ? "var(--pandora-green-400)" : "var(--pandora-ink-600)";
+        const stepStyle = (color: string, clickable: boolean): React.CSSProperties => ({
+          display: "flex", alignItems: "center", gap: 6, padding: "5px 12px",
+          borderRadius: 20, fontSize: 12, border: `1px solid ${color}40`,
+          background: `${color}10`, color,
+          textDecoration: "none", cursor: clickable ? "pointer" : "default",
+          whiteSpace: "nowrap",
+        });
+        return (
+          <div style={{ padding: "8px 24px", borderBottom: "1px solid var(--pandora-ink-800)", background: "var(--pandora-ink-950)", display: "flex", alignItems: "center", gap: 6 }}>
+            {latestProposal ? (
+              <a href={`/propostas/${latestProposal.id}`} style={stepStyle(pColor, true)}>
+                <FileText size={11} />
+                Proposta · {STATUS_PROPOSAL_PT[latestProposal.status] ?? latestProposal.status}
+              </a>
+            ) : (
+              <a href={`/propostas?opportunity_id=${id}`} style={stepStyle(pColor, true)}>
+                <FileText size={11} />
+                Sem proposta
+              </a>
+            )}
+            <span style={{ color: "var(--pandora-ink-700)", fontSize: 16 }}>›</span>
+            {latestContract ? (
+              <a href={`/contratos/${latestContract.id}`} style={stepStyle(cColor, true)}>
+                <ScrollText size={11} />
+                Contrato · {STATUS_CONTRACT_PT[latestContract.status] ?? latestContract.status}
+              </a>
+            ) : (
+              <a href={`/contratos/novo?opportunity_id=${id}${latestProposal ? `&proposal_id=${latestProposal.id}` : ""}`} style={stepStyle(cColor, true)}>
+                <ScrollText size={11} />
+                Sem contrato
+              </a>
+            )}
+            <span style={{ color: "var(--pandora-ink-700)", fontSize: 16 }}>›</span>
+            {clientId ? (
+              <a href={`/operacao/${clientId}`} style={stepStyle(oColor, true)}>
+                <Zap size={11} />
+                Operação · Ativa
+              </a>
+            ) : (
+              <span style={stepStyle(oColor, false)}>
+                <Zap size={11} />
+                Operação · Pendente
+              </span>
+            )}
+          </div>
+        );
+      })()}
 
       {/* ── Tabs ── */}
       <div style={{ borderBottom: "1px solid var(--pandora-ink-800)", padding: "0 24px", display: "flex", gap: 2 }}>
@@ -499,7 +634,7 @@ export default function OportunidadeDetailPage({ params }: { params: Promise<{ i
               <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(160px, 1fr))", gap: 16 }}>
                 <InfoItem label="Canal"      value={CHANNEL_LABEL[opp.channel]} />
                 <InfoItem label="Confiança"  value={CONFIDENCE_LABEL[opp.confidence]} color={CONFIDENCE_COLOR[opp.confidence]} />
-                <InfoItem label="Status"     value={STATUS_LABEL[opp.status]} color={statusColor} />
+                <InfoItem label="Status"     value={STATUS_LABEL[opp.status]} color={STATUS_COLOR[opp.status]} />
                 <InfoItem label="Detectada"  value={fmtDate(opp.detected_at)} />
                 {opp.qualified_at && <InfoItem label="Qualificada" value={fmtDate(opp.qualified_at)} />}
                 {opp.value != null && <InfoItem label="Valor" value={fmtBRL(opp.value) ?? "—"} color="var(--pandora-green-400)" />}

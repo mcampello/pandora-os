@@ -1,0 +1,18 @@
+{
+  "name": "Pandora OS",
+  "short_name": "Pandora",
+  "description": "Sistema operacional da Pandora Tech",
+  "start_url": "/",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#0D0219",
+  "theme_color": "#7A1CB5",
+  "icons": [
+    {
+      "src": "/pandora_ico.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}

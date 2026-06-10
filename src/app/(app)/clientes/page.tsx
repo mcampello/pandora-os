@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { supabaseBrowser } from "@/lib/supabase-browser";
 import type { ContactWithStats, ContactCategory } from "@/lib/types";
+import TaskBell from "@/components/TaskBell";
 import type { MergeSuggestion } from "@/app/api/contacts/suggestions/route";
 import {
   Plus, Search, Users, Phone, Mail, Building2, RefreshCw, Sparkles,
@@ -233,6 +234,7 @@ export default function ClientesPage() {
           <Link href="/clientes/novo" className="pda-btn">
             <Plus size={14} /> Novo
           </Link>
+          <TaskBell />
         </div>
       </header>
 

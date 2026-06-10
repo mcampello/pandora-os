@@ -14,6 +14,7 @@ export async function GET(req: NextRequest) {
   const opportunityId = searchParams.get("opportunity_id");
   const statusParam = searchParams.get("status");
   const groupId = searchParams.get("group_id");
+  const q = searchParams.get("q");
 
   let query = supabase
     .from("contracts")
@@ -23,6 +24,7 @@ export async function GET(req: NextRequest) {
   if (clientId) query = query.eq("client_id", clientId);
   if (opportunityId) query = query.eq("opportunity_id", opportunityId);
   if (groupId) query = query.eq("contract_group_id", groupId);
+  if (q) query = query.ilike("title", `%${q}%`);
   if (statusParam) {
     const statuses = statusParam.split(",").filter(Boolean);
     if (statuses.length === 1) query = query.eq("status", statuses[0]);
@@ -40,7 +42,11 @@ export async function POST(req: NextRequest) {
   if (!user) return NextResponse.json({ error: "unauthorized" }, { status: 401 });
 
   const body = await req.json();
-  const { title, content_md, client_id, opportunity_id, value, status, starts_at, ends_at } = body;
+  const {
+    title, content_md, client_id, opportunity_id, company_id,
+    value, status, starts_at, ends_at,
+    contract_group_id, version,
+  } = body;
 
   if (!title) return NextResponse.json({ error: "title é obrigatório" }, { status: 400 });
 
@@ -49,11 +55,15 @@ export async function POST(req: NextRequest) {
     content_md: content_md ?? null,
     client_id: client_id ?? null,
     opportunity_id: opportunity_id ?? null,
+    company_id: company_id ?? null,
     value: value ?? null,
     status: status ?? "draft",
     starts_at: starts_at ?? null,
     ends_at: ends_at ?? null,
   };
+
+  if (contract_group_id) insert.contract_group_id = contract_group_id;
+  if (version != null) insert.version = version;
 
   const { data, error } = await supabase
     .from("contracts")

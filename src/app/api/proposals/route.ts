@@ -42,15 +42,16 @@ export async function POST(req: NextRequest) {
   if (!user) return NextResponse.json({ error: "unauthorized" }, { status: 401 });
 
   const body = await req.json();
-  const { title, content_md, client_id, opportunity_id, value, status } = body;
+  const { title, content_md, client_id, opportunity_id, company_id, value, status } = body;
 
-  if (!title) return NextResponse.json({ error: "title é obrigatório" }, { status: 400 });
+  if (!title || !company_id) return NextResponse.json({ error: "title e company_id são obrigatórios" }, { status: 400 });
 
   const insert: Record<string, unknown> = {
     title,
     content_md: content_md ?? null,
     client_id: client_id ?? null,
     opportunity_id: opportunity_id ?? null,
+    company_id,
     value: value ?? null,
     status: status ?? "draft",
   };

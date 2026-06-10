@@ -20,11 +20,11 @@ export async function POST(
     .maybeSingle();
 
   if (!opp) return NextResponse.json({ error: "oportunidade não encontrada" }, { status: 404 });
-  if (opp.status === "dismissed") return NextResponse.json({ error: "oportunidade descartada não pode ser convertida" }, { status: 400 });
+  if (opp.status === "perdida") return NextResponse.json({ error: "oportunidade perdida não pode ser convertida" }, { status: 400 });
 
   // Se já tem cliente, apenas atualiza status
   if (opp.converted_to_client_id) {
-    await supabase.from("opportunities").update({ status: "converted" }).eq("id", id);
+    await supabase.from("opportunities").update({ status: "operacional" }).eq("id", id);
     return NextResponse.json({ client_id: opp.converted_to_client_id, created: false });
   }
 
@@ -49,7 +49,7 @@ export async function POST(
   // Atualizar oportunidade
   await supabase
     .from("opportunities")
-    .update({ status: "converted", converted_to_client_id: client.id })
+    .update({ status: "operacional", converted_to_client_id: client.id })
     .eq("id", id);
 
   return NextResponse.json({ client_id: client.id, created: true }, { status: 201 });

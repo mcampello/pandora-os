@@ -104,6 +104,7 @@ bash /root/pandora-os/scripts/deploy-dev.sh   # dev  → dev.campello.pro
     │   └── uazapi.ts         # Envio de WhatsApp via uazapi
     ├── components/
     │   ├── Sidebar.tsx
+    │   ├── AgentChat.tsx     # Chat do agente central (web)
     │   ├── DocEditor.tsx
     │   ├── DocViewerClient.tsx
     │   └── FormUI.tsx
@@ -114,6 +115,7 @@ bash /root/pandora-os/scripts/deploy-dev.sh   # dev  → dev.campello.pro
         ├── (app)/            # Rotas protegidas (requer auth)
         │   ├── layout.tsx    # Shell com Sidebar
         │   ├── page.tsx      # Dashboard
+        │   ├── agente/       # Interface web do agente central
         │   ├── clientes/     # Lista + [id] detalhe + novo
         │   ├── empresas/     # Lista de empresas
         │   ├── oportunidades/ # Kanban + lista
@@ -123,6 +125,8 @@ bash /root/pandora-os/scripts/deploy-dev.sh   # dev  → dev.campello.pro
 │   │   └── [id]/     # Operação full-screen: kanban iniciativas + reuniões
         │   └── configuracoes/conectores/
         ├── api/
+        │   ├── agent/chat/           # POST — agente central (web + telegram)
+        │   ├── dashboard/            # GET — stats + tasks + activity
         │   ├── ai/improve/           # Melhoria de texto via AI
         │   ├── client-documents/[id]/ # Documentos por cliente
         │   ├── clients/[id]/         # CRUD clientes
@@ -257,6 +261,9 @@ Identidade unificada que liga email, WhatsApp e reuniões.
 | notes | text | |
 | ai_summary | text | resumo gerado por AI |
 | ai_summary_updated_at | timestamptz | |
+| last_whatsapp_at | timestamptz | atualizado por trigger ao inserir interaction channel=whatsapp |
+| last_email_at | timestamptz | atualizado por trigger ao inserir interaction channel=email |
+| last_meeting_at | timestamptz | atualizado por trigger ao inserir interaction channel=calcom/gcalendar/fathom |
 
 ### `clients` — relacionamento comercial
 
@@ -434,6 +441,20 @@ Regras built-in: `whatsapp_unanswered_6h`, `opportunity_stale_7d`, `proposal_unv
 
 RLS: `authenticated` full access + `anon` full access (necessário pois `SUPABASE_SERVICE_ROLE_KEY` não está configurado — admin client cai para anon key; segurança mantida via `AGENT_SECRET` no HTTP).
 
+### `agent_messages` — histórico de conversa do agente central
+Persistência das mensagens trocadas com o agente (Telegram e Web).
+
+| Coluna | Tipo | Notas |
+|--------|------|-------|
+| id | uuid | PK |
+| channel | text | `telegram` / `web` (CHECK) |
+| role | text | `user` / `assistant` (CHECK) |
+| content | text | obrigatório |
+| tool_calls | jsonb | tool calls pendentes/executados (null se não houver) |
+| created_at | timestamptz | default now() |
+
+Índice `idx_agent_messages_channel_created (channel, created_at DESC)`.
+
 ### `public.documents` — mensagens WhatsApp vetorizadas
 Ingeridas pelo N8N. **Não duplicar esta ingestão.** Tabelas relacionadas: `groups`, `participants`, `group_participants`.
 
@@ -461,6 +482,9 @@ Todas as tabelas com Row Level Security ativo. Política: `authenticated` tem fu
 - [x] Portal do cliente (/portal/[slug])
 - [x] Módulo Financeiro (/financeiro) — lista de contratos ativos com KPIs (MRR, NFs pendentes), detalhe por contrato com 4 abas: Cliente (cadastro CNPJ/endereço/responsável), Escopo (markdown + condições), Pessoas (contacts + reuniões Fathom), Faturamento (NFs/invoices CRUD)
 - [x] Sistema de Tarefas Inteligente — agentes de background (`/api/agents/scan` + `/api/agents/ai-scan`), fila priorizada (`/tarefas`), TaskBell no topbar, widget no dashboard, contextual no perfil de contato
+- [x] Sync automático a cada 30 min — crontab no VPS chama `POST /api/sync/all` com `Authorization: Bearer {AGENT_SECRET}` → sincroniza WhatsApp, Gmail e Google Calendar. Log em `/var/log/pandora-sync.log`.
+- [x] Cal.com webhook — `POST /api/connectors/calcom/webhook` processa BOOKING_CREATED/RESCHEDULED em tempo real (registrar URL no Cal.com: `https://app.campello.me/api/connectors/calcom/webhook`).
+- [x] Última atualização real dos contatos — trigger Postgres `trg_interaction_update_contact_channels` atualiza `contacts.last_whatsapp_at/last_email_at/last_meeting_at` a cada INSERT/UPDATE em `interactions`.
 - [ ] N8N: configurar 2 HTTP Request nodes — scan (1h) e ai-scan (6h) → `https://app.campello.me/api/agents/*` com `Authorization: Bearer {AGENT_SECRET}`
 - [ ] Configurar `SUPABASE_SERVICE_ROLE_KEY` corretamente em `.env.local` (atualmente vazio; admin client cai para anon)
 - [ ] Gmail OAuth real

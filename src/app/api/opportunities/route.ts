@@ -49,13 +49,13 @@ export async function POST(req: NextRequest) {
   if (!user) return NextResponse.json({ error: "unauthorized" }, { status: 401 });
 
   const body = await req.json();
-  const { contact_id, title, description, channel, confidence, status, notes, value, contract_model, company } = body;
+  const { contact_id, company_id, title, description, channel, confidence, status, notes, value, contract_model, company } = body;
 
-  if (!title || !channel || !confidence) {
-    return NextResponse.json({ error: "title, channel e confidence são obrigatórios" }, { status: 400 });
+  if (!title || !channel || !confidence || !company_id) {
+    return NextResponse.json({ error: "title, channel, confidence e company_id são obrigatórios" }, { status: 400 });
   }
 
-  const oppStatus = status ?? "new";
+  const oppStatus = status ?? "nova";
   const insert: Record<string, unknown> = {
     contact_id: contact_id ?? null,
     title,
@@ -69,7 +69,7 @@ export async function POST(req: NextRequest) {
     company: company || null,
     detected_at: new Date().toISOString(),
   };
-  if (oppStatus === "qualified") {
+  if (oppStatus === "em_contato") {
     insert.qualified_at = new Date().toISOString();
   }
 

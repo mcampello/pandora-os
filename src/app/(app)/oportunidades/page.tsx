@@ -1,9 +1,10 @@
 "use client";
 
-import { Suspense, useCallback, useEffect, useMemo, useState } from "react";
+import { Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { supabaseBrowser } from "@/lib/supabase-browser";
+import TaskBell from "@/components/TaskBell";
 import type {
   Contact,
   OpportunityChannel,
@@ -48,6 +49,7 @@ interface OppFormState {
   value: string;
   contract_model: string;
   company: string;
+  company_id: string;
 }
 
 const emptyForm = (): OppFormState => ({
@@ -55,12 +57,13 @@ const emptyForm = (): OppFormState => ({
   description: "",
   channel: "manual",
   confidence: "medium",
-  status: "new",
+  status: "nova",
   notes: "",
   contact_id: "",
   value: "",
   contract_model: "",
   company: "",
+  company_id: "",
 });
 
 function OportunidadesPageInner() {
@@ -86,6 +89,9 @@ function OportunidadesPageInner() {
   const [sortAsc, setSortAsc] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
+  const [companiesList, setCompaniesList] = useState<{ id: string; name: string }[]>([]);
+  const [confirmOperacional, setConfirmOperacional] = useState<OpportunityWithContact | null>(null);
+  const [confirmSaving, setConfirmSaving] = useState(false);
 
   const supabase = supabaseBrowser();
 
@@ -205,12 +211,9 @@ function OportunidadesPageInner() {
 
   const byStatus = useMemo(() => {
     const map: Record<OpportunityStatus, OpportunityWithContact[]> = {
-      new: [],
-      qualified: [],
-      converted: [],
-      dismissed: [],
+      nova: [], em_contato: [], proposta: [], contrato: [], operacional: [], perdida: [],
     };
-    for (const o of processed) map[o.status].push(o);
+    for (const o of processed) map[o.status]?.push(o);
     return map;
   }, [processed]);
 
@@ -231,15 +234,14 @@ function OportunidadesPageInner() {
   }
 
   async function patchStatus(opp: OpportunityWithContact, status: OpportunityStatus) {
-    if (status === "converted" && !opp.contact_id) {
-      setActionError("Vincule um contato antes de converter a oportunidade.");
-      setTimeout(() => setActionError(null), 4000);
+    if (status === "operacional") {
+      setConfirmOperacional(opp);
       return;
     }
     const res = await fetch(`/api/opportunities/${opp.id}`, {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ status, contact_id: opp.contact_id }),
+      body: JSON.stringify({ status }),
     });
     if (res.ok) {
       await load();
@@ -250,8 +252,30 @@ function OportunidadesPageInner() {
     }
   }
 
+  async function confirmMoveToOperacional() {
+    if (!confirmOperacional) return;
+    setConfirmSaving(true);
+    const res = await fetch(`/api/opportunities/${confirmOperacional.id}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ status: "operacional" }),
+    });
+    setConfirmSaving(false);
+    if (res.ok) {
+      setConfirmOperacional(null);
+      await load();
+      const clientId = confirmOperacional.converted_to_client_id;
+      router.push(clientId ? `/operacao/${clientId}` : "/operacao");
+    } else {
+      const body = await res.json().catch(() => ({}));
+      setActionError(body.error ?? "Erro ao atualizar oportunidade.");
+      setTimeout(() => setActionError(null), 4000);
+      setConfirmOperacional(null);
+    }
+  }
+
   async function saveForm() {
-    if (!form.title.trim()) return;
+    if (!form.title.trim() || !form.company_id) return;
     setSaving(true);
     setSaveError(null);
     const payload = {
@@ -322,6 +346,7 @@ function OportunidadesPageInner() {
           <button type="button" className="pda-btn" onClick={openCreate}>
             <Plus size={14} /> Nova
           </button>
+          <TaskBell />
         </div>
       </header>
 
@@ -428,30 +453,11 @@ function OportunidadesPageInner() {
             <div className="pda-empty-desc">Ajuste os filtros ou limpe a busca.</div>
           </div>
         ) : viewMode === "kanban" ? (
-          <div className="pda-kanban">
-            {STATUS_COLUMNS.map((st) => (
-              <div key={st} className={`pda-kanban-col${st === "dismissed" ? " dimmed" : ""}`}>
-                <div className="pda-kanban-col-head">
-                  <span style={{ color: STATUS_COLOR[st] }}>{STATUS_LABEL[st]}</span>
-                  <span>{byStatus[st].length}</span>
-                </div>
-                <div className="pda-kanban-col-body">
-                  {byStatus[st].map((opp) => (
-                    <KanbanCard
-                      key={opp.id}
-                      opp={opp}
-                      onEdit={() => openEdit(opp)}
-                      onAdvance={() => {
-                        const next = NEXT_STATUS[opp.status];
-                        if (next) patchStatus(opp, next);
-                      }}
-                      onDismiss={() => patchStatus(opp, "dismissed")}
-                    />
-                  ))}
-                </div>
-              </div>
-            ))}
-          </div>
+          <KanbanBoard
+            byStatus={byStatus}
+            onEdit={openEdit}
+            onPatchStatus={patchStatus}
+          />
         ) : (
           <OpportunityTable
             rows={processed}
@@ -598,13 +604,17 @@ function OportunidadesPageInner() {
                     step="0.01"
                   />
                 </Field>
-                <Field label="Empresa">
-                  <input
-                    value={form.company}
-                    onChange={(e) => setForm((f) => ({ ...f, company: e.target.value }))}
+                <Field label="Empresa *">
+                  <select
+                    value={form.company_id}
+                    onChange={(e) => setForm((f) => ({ ...f, company_id: e.target.value }))}
                     style={inputStyle}
-                    placeholder="Nome da empresa…"
-                  />
+                  >
+                    <option value="">— selecione a empresa —</option>
+                    {companiesList.map(c => (
+                      <option key={c.id} value={c.id}>{c.name}</option>
+                    ))}
+                  </select>
                 </Field>
               </div>
               <Field label="Modelo de Contratação">
@@ -651,7 +661,7 @@ function OportunidadesPageInner() {
             <div className="pda-drawer-foot" style={{ flexDirection: "column", gap: 12 }}>
               {saveError && <div className="pda-error-banner">{saveError}</div>}
               <div style={{ display: "flex", gap: 8 }}>
-                <button type="button" className="pda-btn" disabled={saving || !form.title.trim()} onClick={saveForm}>
+                <button type="button" className="pda-btn" disabled={saving || !form.title.trim() || !form.company_id} onClick={saveForm}>
                   {saving ? "Salvando…" : "Salvar"}
                 </button>
                 <button type="button" className="pda-btn pda-btn-ghost" onClick={() => setDrawerOpen(false)}>
@@ -662,7 +672,129 @@ function OportunidadesPageInner() {
           </aside>
         </>
       )}
+
+      {confirmOperacional && (
+        <>
+          <div
+            style={{
+              position: "fixed", inset: 0, background: "rgba(0,0,0,0.45)", zIndex: 200,
+              display: "flex", alignItems: "center", justifyContent: "center",
+            }}
+            onClick={() => !confirmSaving && setConfirmOperacional(null)}
+          />
+          <div
+            role="dialog"
+            aria-modal="true"
+            style={{
+              position: "fixed", zIndex: 201,
+              top: "50%", left: "50%", transform: "translate(-50%,-50%)",
+              background: "#fff", borderRadius: 14, padding: 28,
+              width: "min(440px, 90vw)", boxShadow: "0 24px 60px rgba(0,0,0,0.18)",
+            }}
+          >
+            <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 16 }}>
+              <div style={{
+                width: 40, height: 40, borderRadius: "50%",
+                background: "var(--pandora-green-50)",
+                display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0,
+              }}>
+                <span style={{ fontSize: 20 }}>🚀</span>
+              </div>
+              <div>
+                <p style={{ margin: 0, fontFamily: "var(--font-display)", fontWeight: 700, fontSize: 15, color: "var(--pandora-violet-900)" }}>
+                  Iniciar operações?
+                </p>
+                <p style={{ margin: "2px 0 0", fontSize: 12, color: "var(--pandora-ink-500)" }}>
+                  {confirmOperacional.title}
+                </p>
+              </div>
+            </div>
+            <p style={{ fontSize: 13, color: "var(--pandora-ink-600)", lineHeight: 1.6, margin: "0 0 20px" }}>
+              Mover esta oportunidade para <strong style={{ color: "#059669" }}>Operacional</strong> indica que o cliente foi fechado e as operações devem começar. Deseja continuar?
+            </p>
+            <div style={{ display: "flex", gap: 8, justifyContent: "flex-end" }}>
+              <button
+                type="button"
+                className="pda-btn pda-btn-ghost"
+                onClick={() => setConfirmOperacional(null)}
+                disabled={confirmSaving}
+              >
+                Cancelar
+              </button>
+              <button
+                type="button"
+                className="pda-btn"
+                style={{ background: "#059669", borderColor: "#059669" }}
+                onClick={confirmMoveToOperacional}
+                disabled={confirmSaving}
+              >
+                {confirmSaving ? "Salvando…" : "Sim, iniciar operações"}
+              </button>
+            </div>
+          </div>
+        </>
+      )}
     </>
+  );
+}
+
+function KanbanBoard({
+  byStatus,
+  onEdit,
+  onPatchStatus,
+}: {
+  byStatus: Record<OpportunityStatus, OpportunityWithContact[]>;
+  onEdit: (opp: OpportunityWithContact) => void;
+  onPatchStatus: (opp: OpportunityWithContact, status: OpportunityStatus) => void;
+}) {
+  const dragging = useRef<OpportunityWithContact | null>(null);
+  const [dragOver, setDragOver] = useState<OpportunityStatus | null>(null);
+
+  return (
+    <div className="pda-kanban">
+      {STATUS_COLUMNS.map((col) => (
+        <div
+          key={col}
+          className={`pda-kanban-col${col === "perdida" ? " dimmed" : ""}`}
+          style={{
+            outline: dragOver === col ? `2px solid ${STATUS_COLOR[col]}` : undefined,
+            borderRadius: dragOver === col ? 10 : undefined,
+            transition: "outline 0.1s",
+          }}
+          onDragOver={(e) => { e.preventDefault(); setDragOver(col); }}
+          onDragLeave={() => setDragOver(null)}
+          onDrop={(e) => {
+            e.preventDefault();
+            setDragOver(null);
+            if (dragging.current && dragging.current.status !== col) {
+              onPatchStatus(dragging.current, col);
+            }
+            dragging.current = null;
+          }}
+        >
+          <div className="pda-kanban-col-head">
+            <span style={{ color: STATUS_COLOR[col] }}>{STATUS_LABEL[col]}</span>
+            <span>{byStatus[col].length}</span>
+          </div>
+          <div className="pda-kanban-col-body">
+            {byStatus[col].map((opp) => (
+              <KanbanCard
+                key={opp.id}
+                opp={opp}
+                onEdit={() => onEdit(opp)}
+                onAdvance={() => {
+                  const next = NEXT_STATUS[opp.status];
+                  if (next) onPatchStatus(opp, next);
+                }}
+                onDiscard={() => onPatchStatus(opp, "perdida")}
+                onDragStart={() => { dragging.current = opp; }}
+                onDragEnd={() => { dragging.current = null; }}
+              />
+            ))}
+          </div>
+        </div>
+      ))}
+    </div>
   );
 }
 
@@ -670,16 +802,30 @@ function KanbanCard({
   opp,
   onEdit,
   onAdvance,
-  onDismiss,
+  onDiscard,
+  onDragStart,
+  onDragEnd,
 }: {
   opp: OpportunityWithContact;
   onEdit: () => void;
   onAdvance: () => void;
-  onDismiss: () => void;
+  onDiscard: () => void;
+  onDragStart: () => void;
+  onDragEnd: () => void;
 }) {
   const next = NEXT_STATUS[opp.status];
   return (
-    <div className="pda-kanban-card" onClick={onEdit} onKeyDown={(e) => e.key === "Enter" && onEdit()} role="button" tabIndex={0}>
+    <div
+      className="pda-kanban-card"
+      draggable
+      onClick={onEdit}
+      onKeyDown={(e) => e.key === "Enter" && onEdit()}
+      onDragStart={(e) => { e.dataTransfer.effectAllowed = "move"; onDragStart(); }}
+      onDragEnd={onDragEnd}
+      role="button"
+      tabIndex={0}
+      style={{ cursor: "grab" }}
+    >
       <div className="pda-kanban-card-title">{opp.title}</div>
       <div className="pda-kanban-card-meta">
         <span style={{ color: CONFIDENCE_COLOR[opp.confidence], fontWeight: 600 }}>{CONFIDENCE_LABEL[opp.confidence]}</span>
@@ -742,9 +888,9 @@ function KanbanCard({
             <ChevronRight size={12} /> {STATUS_LABEL[next]}
           </button>
         )}
-        {opp.status !== "dismissed" && (
-          <button type="button" className="pda-btn pda-btn-ghost" style={{ fontSize: 11, padding: "3px 8px" }} onClick={onDismiss}>
-            Descartar
+        {opp.status !== "perdida" && (
+          <button type="button" className="pda-btn pda-btn-ghost" style={{ fontSize: 11, padding: "3px 8px" }} onClick={onDiscard}>
+            Perder
           </button>
         )}
       </div>
