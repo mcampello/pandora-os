@@ -95,7 +95,7 @@ export async function aiWithTools(
   const apiKey = process.env.OPENROUTER_API_KEY;
   if (!apiKey) throw new Error("OPENROUTER_API_KEY não configurada");
 
-  const model = options.model ?? process.env.OPENROUTER_DEFAULT_MODEL ?? "moonshotai/kimi-k2";
+  const model = options.model ?? process.env.OPENROUTER_AGENT_MODEL ?? "nousresearch/hermes-3-llama-3.1-70b";
 
   // Converte para formato OpenAI (compatível com todos os modelos no OpenRouter)
   const openaiTools = tools.map((t) => ({
