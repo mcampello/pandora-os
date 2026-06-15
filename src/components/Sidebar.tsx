@@ -98,14 +98,16 @@ export default function Sidebar() {
 
       <ul className="pda-nav" style={{ marginTop: 8 }}>
         <li>
-          <Link
-            href="/agente"
-            className={clsx("pda-nav-item", pathname.startsWith("/agente") && "active")}
+          <button
+            type="button"
+            onClick={() => window.dispatchEvent(new Event("pandora:toggle-agent"))}
+            className="pda-nav-item"
+            style={{ width: "100%", background: "none", border: "none", cursor: "pointer", font: "inherit", textAlign: "left" }}
             title={collapsed ? "Agente" : undefined}
           >
             <Bot size={16} />
             <span className="pda-nav-label">Agente</span>
-          </Link>
+          </button>
         </li>
         <li>
           <Link

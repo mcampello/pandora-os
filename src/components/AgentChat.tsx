@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import { useRouter, usePathname, useParams } from "next/navigation";
 import { Send } from "lucide-react";
 
 interface Message {
@@ -8,13 +9,70 @@ interface Message {
   content: string;
 }
 
-export default function AgentChat({ initialMessages }: { initialMessages: Message[] }) {
-  const [messages, setMessages] = useState<Message[]>(initialMessages);
+type EntityType = "contact" | "client" | "company" | "opportunity" | "proposal" | "contract" | "pipeline";
+
+interface PageContext {
+  pathname: string;
+  route_label: string;
+  entity_type?: EntityType;
+  entity_id?: string;
+}
+
+// Mapa seção → rótulo + tipo de entidade (espelha as rotas em src/app/(app)).
+const SECTION_MAP: Record<string, { label: string; type?: EntityType }> = {
+  "":              { label: "Dashboard" },
+  empresas:        { label: "Empresas", type: "company" },
+  clientes:        { label: "Contatos", type: "contact" },
+  oportunidades:   { label: "Oportunidades (pipeline)", type: "pipeline" },
+  propostas:       { label: "Propostas", type: "proposal" },
+  contratos:       { label: "Contratos", type: "contract" },
+  operacao:        { label: "Operação", type: "client" },
+  financeiro:      { label: "Financeiro" },
+  agente:          { label: "Agente" },
+  configuracoes:   { label: "Conectores" },
+};
+
+function derivePageContext(pathname: string, params: Record<string, string | string[]>): PageContext {
+  const section = pathname.split("/").filter(Boolean)[0] ?? "";
+  const m = SECTION_MAP[section] ?? { label: pathname };
+  const id = typeof params?.id === "string" ? params.id : undefined;
+  const ctx: PageContext = { pathname, route_label: m.label };
+  if (m.type === "pipeline") {
+    ctx.entity_type = "pipeline";
+  } else if (id && m.type) {
+    ctx.entity_type = m.type;
+    ctx.entity_id = id;
+  }
+  return ctx;
+}
+
+export default function AgentChat({ initialMessages }: { initialMessages?: Message[] }) {
+  const [messages, setMessages] = useState<Message[]>(initialMessages ?? []);
   const [input, setInput]       = useState("");
   const [loading, setLoading]   = useState(false);
   const [pending, setPending]   = useState(false);
   const bottomRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+
+  const router   = useRouter();
+  const pathname = usePathname();
+  const params   = useParams();
+
+  // Hidrata o histórico quando montado sem mensagens iniciais (uso no dock).
+  useEffect(() => {
+    if (initialMessages !== undefined) return;
+    let active = true;
+    (async () => {
+      try {
+        const res = await fetch("/api/agent/chat");
+        const data = await res.json();
+        if (active && Array.isArray(data.messages)) setMessages(data.messages);
+      } catch {
+        // abre vazio se falhar
+      }
+    })();
+    return () => { active = false; };
+  }, [initialMessages]);
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -31,7 +89,10 @@ export default function AgentChat({ initialMessages }: { initialMessages: Messag
     }
 
     try {
-      const body: Record<string, string> = { channel: "web" };
+      const body: Record<string, unknown> = {
+        channel: "web",
+        page_context: derivePageContext(pathname, params as Record<string, string | string[]>),
+      };
       if (message) body.message = message;
       if (confirmAction) body.confirm_action = confirmAction;
 
@@ -45,6 +106,9 @@ export default function AgentChat({ initialMessages }: { initialMessages: Messag
       if (data.response) {
         setMessages(prev => [...prev, { role: "assistant", content: data.response }]);
         if (data.pending_confirmation) setPending(true);
+        // Influência na tela: reflete escritas sem reload manual.
+        if (data.navigate_to) router.push(data.navigate_to as string);
+        else if (data.did_write) router.refresh();
       } else if (data.error) {
         setMessages(prev => [...prev, { role: "assistant", content: `Erro: ${data.error}` }]);
       }

@@ -2,6 +2,7 @@
 
 import Sidebar from "@/components/Sidebar";
 import WhatsAppChatPanel from "@/components/WhatsAppChatPanel";
+import AgentDock from "@/components/AgentDock";
 import { ChatPanelProvider } from "@/lib/chat-panel-context";
 
 export default function AppShell({ children }: { children: React.ReactNode }) {
@@ -10,6 +11,7 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
       <div style={{ display: "flex", height: "100vh", overflow: "hidden" }}>
         <Sidebar />
         <div className="pda-main">{children}</div>
+        <AgentDock />
         <WhatsAppChatPanel />
       </div>
     </ChatPanelProvider>

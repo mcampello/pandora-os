@@ -485,13 +485,14 @@ Todas as tabelas com Row Level Security ativo. Política: `authenticated` tem fu
 - [x] Sync automático a cada 30 min — crontab no VPS chama `POST /api/sync/all` com `Authorization: Bearer {AGENT_SECRET}` → sincroniza WhatsApp, Gmail e Google Calendar. Log em `/var/log/pandora-sync.log`.
 - [x] Cal.com webhook — `POST /api/connectors/calcom/webhook` processa BOOKING_CREATED/RESCHEDULED em tempo real (registrar URL no Cal.com: `https://app.campello.me/api/connectors/calcom/webhook`).
 - [x] Última atualização real dos contatos — trigger Postgres `trg_interaction_update_contact_channels` atualiza `contacts.last_whatsapp_at/last_email_at/last_meeting_at` a cada INSERT/UPDATE em `interactions`.
+- [x] Agente central como **dock contextual à direita** (`AgentDock`, montado no `AppShell`) — presente em toda tela `(app)`, empurra o conteúdo, persiste estado, abre via FAB ou item "Agente" do Sidebar. Ciente da tela atual (`page_context`) e atualiza a página após escritas (`router.refresh` / navega para o doc criado). Ferramentas de escrita (contato/cliente/oportunidade/proposta/contrato) com confirmação; geração AI de proposta/contrato via `src/lib/doc-generation.ts`.
+- [x] `SUPABASE_SERVICE_ROLE_KEY` configurada em `.env.local` (admin client usa service role e bypassa RLS; políticas `anon` viram redundantes mas seguem inertes)
 - [ ] N8N: configurar 2 HTTP Request nodes — scan (1h) e ai-scan (6h) → `https://app.campello.me/api/agents/*` com `Authorization: Bearer {AGENT_SECRET}`
-- [ ] Configurar `SUPABASE_SERVICE_ROLE_KEY` corretamente em `.env.local` (atualmente vazio; admin client cai para anon)
 - [ ] Gmail OAuth real
 - [ ] Telegram Bot
 - [ ] Detector de oportunidades (AI)
-- [ ] Propostas com AI (geração completa)
-- [ ] Contratos com versionamento + diff visual
+- [~] Propostas com AI — geração via agente (dock) OK; refinar fluxo no DocEditor
+- [ ] Contratos com versionamento + diff visual (geração via agente OK; falta diff entre versões)
 - [ ] Integração Fathom (reuniões)
 - [ ] Integração Cal.com
 - [ ] Integração Asaas (vincular invoices com Asaas)

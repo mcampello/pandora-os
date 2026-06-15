@@ -33,6 +33,14 @@ interface PendingWrite {
   calls: ToolCall[];
 }
 
+// Contexto da tela em que o Mario está (enviado pelo dock/web).
+interface PageContext {
+  pathname?: string;
+  route_label?: string;
+  entity_type?: "contact" | "client" | "company" | "opportunity" | "proposal" | "contract" | "pipeline";
+  entity_id?: string;
+}
+
 // ── Auth ─────────────────────────────────────────────────────
 async function isAuthorized(req: NextRequest): Promise<boolean> {
   const secret = process.env.AGENT_SECRET;
@@ -55,8 +63,52 @@ async function saveMessage(
   await db.from("agent_messages").insert({ channel, role, content, tool_calls });
 }
 
+// ── Snapshot curto da entidade da tela atual (para "este/esta") ─
+async function buildPageContextBlock(
+  db: ReturnType<typeof supabaseAdmin>,
+  ctx: PageContext
+): Promise<string> {
+  const lines: string[] = [
+    "",
+    "Contexto da tela atual (o Mario está olhando para isto agora):",
+    `- Tela: ${ctx.route_label ?? ctx.pathname ?? "desconhecida"}`,
+  ];
+
+  const id = ctx.entity_id;
+  if (id && ctx.entity_type) {
+    try {
+      if (ctx.entity_type === "contact") {
+        const { data } = await db.from("contacts").select("id, name, email, company, ai_summary").eq("id", id).maybeSingle();
+        if (data) lines.push(`- Contato em foco: ${data.name} (id ${data.id})${data.company ? ` — ${data.company}` : ""}`);
+      } else if (ctx.entity_type === "client") {
+        const { data } = await db.from("clients").select("id, company_name, status, monthly_fee, health_score").eq("id", id).maybeSingle();
+        if (data) lines.push(`- Cliente em foco: ${data.company_name} (id ${data.id}) — status ${data.status}, fee R$ ${data.monthly_fee ?? 0}, health ${data.health_score ?? "?"}`);
+      } else if (ctx.entity_type === "company") {
+        const { data } = await db.from("companies").select("id, name, industry").eq("id", id).maybeSingle();
+        if (data) lines.push(`- Empresa em foco: ${data.name} (id ${data.id})`);
+      } else if (ctx.entity_type === "opportunity") {
+        const { data } = await db.from("opportunities").select("id, title, status, value").eq("id", id).maybeSingle();
+        if (data) lines.push(`- Oportunidade em foco: ${data.title} (id ${data.id}) — status ${data.status}`);
+      } else if (ctx.entity_type === "proposal") {
+        const { data } = await db.from("proposals").select("id, title, status, value, client_id").eq("id", id).maybeSingle();
+        if (data) lines.push(`- Proposta em foco: ${data.title} (id ${data.id}) — status ${data.status}, valor R$ ${data.value ?? "?"}, client_id ${data.client_id ?? "—"}`);
+      } else if (ctx.entity_type === "contract") {
+        const { data } = await db.from("contracts").select("id, title, status, value, client_id").eq("id", id).maybeSingle();
+        if (data) lines.push(`- Contrato em foco: ${data.title} (id ${data.id}) — status ${data.status}, valor R$ ${data.value ?? "?"}, client_id ${data.client_id ?? "—"}`);
+      }
+    } catch {
+      // snapshot é best-effort; ignora falha
+    }
+  }
+  lines.push('- Quando o Mario disser "este/esta/aqui", assuma que se refere à entidade em foco acima e use o id dela.');
+  return lines.join("\n");
+}
+
 // ── System prompt com snapshot do negócio ────────────────────
-async function buildSystemPrompt(db: ReturnType<typeof supabaseAdmin>): Promise<string> {
+async function buildSystemPrompt(
+  db: ReturnType<typeof supabaseAdmin>,
+  pageContext?: PageContext | null
+): Promise<string> {
   const [{ count: clientsActive }, { count: tasksOpen }, { count: proposalsPending }] = await Promise.all([
     db.from("clients").select("*", { count: "exact", head: true }).eq("status", "active"),
     db.from("tasks").select("*", { count: "exact", head: true }).eq("status", "open"),
@@ -65,9 +117,9 @@ async function buildSystemPrompt(db: ReturnType<typeof supabaseAdmin>): Promise<
 
   const hoje = new Date().toISOString().slice(0, 10);
 
-  return [
+  const base = [
     "Você é a Pandora, a assistente do Mario Campello na operação da Pandora Tech (consultoria).",
-    "Você tem acesso direto aos dados do negócio dele (CRM, propostas, clientes, tarefas, financeiro) através de ferramentas.",
+    "Você tem acesso direto aos dados do negócio dele (CRM, propostas, contratos, clientes, tarefas, financeiro) através de ferramentas.",
     "",
     `Data de hoje: ${hoje}.`,
     "Snapshot atual do negócio:",
@@ -79,8 +131,14 @@ async function buildSystemPrompt(db: ReturnType<typeof supabaseAdmin>): Promise<
     "- Responda sempre em português do Brasil, de forma direta e objetiva — você fala com o Mario, não com clientes.",
     "- Use as ferramentas de leitura para consultar dados reais antes de afirmar números ou fatos. Nunca invente dados.",
     "- Para ações que alteram dados (criar/atualizar), chame a ferramenta de escrita apropriada; o sistema pedirá confirmação ao Mario antes de executar.",
+    "- Você pode criar contatos, clientes, oportunidades, propostas e contratos, e gerenciar o pipeline. Ao criar proposta/contrato, por padrão gere o conteúdo completo via AI.",
     "- Seja conciso. Quando listar itens, prefira listas curtas com o essencial.",
   ].join("\n");
+
+  if (pageContext && (pageContext.pathname || pageContext.entity_id)) {
+    return base + "\n" + (await buildPageContextBlock(db, pageContext));
+  }
+  return base;
 }
 
 // ── Descrição PT de uma ação de escrita (texto de confirmação) ─
@@ -99,6 +157,18 @@ function describeWrite(call: ToolCall): string {
       return `atualizar o health score do cliente ${i.client_id} para ${i.health_score}`;
     case "update_proposal_status":
       return `mudar o status da proposta ${i.id} para "${i.status}"`;
+    case "create_contact":
+      return `criar o contato "${i.name}"${i.company ? ` (${i.company})` : ""}`;
+    case "create_client":
+      return `criar o cliente "${i.company_name ?? i.contact_id}"${i.status ? ` (${i.status})` : ""}`;
+    case "update_client":
+      return `atualizar o cliente ${i.client_id}`;
+    case "update_opportunity":
+      return `atualizar a oportunidade ${i.id}`;
+    case "create_proposal":
+      return `criar${i.generate === false ? "" : " e gerar"} a proposta "${i.title}"${i.value ? ` (R$ ${i.value})` : ""}`;
+    case "create_contract":
+      return `criar${i.generate === false ? "" : " e gerar"} o contrato "${i.title}"${i.value ? ` (R$ ${i.value})` : ""}`;
     default:
       return `executar ${call.name}`;
   }
@@ -110,18 +180,41 @@ function confirmationText(calls: ToolCall[]): string {
   return `Quero confirmar antes de executar:\n${actions}\n\nPosso prosseguir com ${plural}? (responda *sim* ou *não*)`;
 }
 
-// ── Executa as escritas pendentes e devolve o texto de resultado ─
-async function runPendingWrites(calls: ToolCall[]): Promise<string> {
+// ── Executa as escritas pendentes; devolve texto + destino de navegação ─
+async function runPendingWrites(calls: ToolCall[]): Promise<{ text: string; navigateTo: string | null }> {
   const lines: string[] = [];
+  let navigateTo: string | null = null;
   for (const call of calls) {
     const result: ToolResult = await executeWriteTool(call.name, call.input ?? {});
     if (result.success) {
       lines.push(`✅ ${describeWrite(call)} — feito.`);
+      // create_proposal/create_contract devolvem navigate_to para abrir o doc gerado.
+      const data = result.data as { navigate_to?: string } | null;
+      if (data?.navigate_to) navigateTo = data.navigate_to;
     } else {
       lines.push(`❌ ${describeWrite(call)} — falhou: ${result.error}`);
     }
   }
-  return lines.join("\n");
+  return { text: lines.join("\n"), navigateTo };
+}
+
+// ────────────────────────────────────────────
+// GET — histórico recente do canal web (hidrata o dock em qualquer página)
+// ────────────────────────────────────────────
+
+export async function GET(req: NextRequest) {
+  if (!(await isAuthorized(req))) {
+    return NextResponse.json({ error: "unauthorized" }, { status: 401 });
+  }
+  const db = supabaseAdmin();
+  const { data } = await db
+    .from("agent_messages")
+    .select("role, content")
+    .eq("channel", "web")
+    .order("created_at", { ascending: false })
+    .limit(30);
+  const messages = (data ?? []).reverse();
+  return NextResponse.json({ messages });
 }
 
 // ────────────────────────────────────────────
@@ -133,7 +226,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "unauthorized" }, { status: 401 });
   }
 
-  let body: { message?: string; channel?: Channel; confirm_action?: "yes" | "no" };
+  let body: { message?: string; channel?: Channel; confirm_action?: "yes" | "no"; page_context?: PageContext };
   try {
     body = await req.json();
   } catch {
@@ -143,6 +236,7 @@ export async function POST(req: NextRequest) {
   const channel: Channel = body.channel === "telegram" ? "telegram" : "web";
   const message = typeof body.message === "string" ? body.message.trim() : "";
   const confirmAction = body.confirm_action;
+  const pageContext = body.page_context ?? null;
 
   const db = supabaseAdmin();
 
@@ -168,9 +262,9 @@ export async function POST(req: NextRequest) {
     if (!pending) {
       return NextResponse.json({ response: "Não há nenhuma ação pendente para confirmar." });
     }
-    const resultText = await runPendingWrites(pending.calls);
+    const { text: resultText, navigateTo } = await runPendingWrites(pending.calls);
     await saveMessage(db, channel, "assistant", resultText, null);
-    return NextResponse.json({ response: resultText });
+    return NextResponse.json({ response: resultText, did_write: true, navigate_to: navigateTo });
   }
   if (confirmAction === "no") {
     if (!pending) {
@@ -189,7 +283,7 @@ export async function POST(req: NextRequest) {
   await saveMessage(db, channel, "user", message, null);
 
   // 6. System prompt + montagem do histórico para o modelo
-  const system = await buildSystemPrompt(db);
+  const system = await buildSystemPrompt(db, pageContext);
   const messages: AIMessage[] = [
     { role: "system", content: system },
     ...history.map((m): AIMessage => ({
