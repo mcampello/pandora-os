@@ -1,0 +1,6 @@
+# Segredos e artefatos locais — NÃO commitar
+.env
+.token
+*.csv
+.sent-*.log
+media/
