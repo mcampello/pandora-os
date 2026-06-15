@@ -907,6 +907,14 @@ html, body {
   .pda-bottom-nav     { display: flex; }
   .pda-bottom-overlay { display: block; }
   .pda-bottom-more    { display: block; }
+
+  /* Dock: trilho fino quando recolhido; aberto vira overlay (não espreme o conteúdo) */
+  .pda-dock[data-open="true"] {
+    position: fixed;
+    top: 0; right: 0; bottom: 0;
+    width: min(400px, 100vw);
+    z-index: 60;
+  }
 }
 
 /* ── Bottom Nav bar ── */
@@ -1013,14 +1021,22 @@ html, body {
   color: var(--pandora-violet-400);
 }
 
+/* Boot do shell autenticado (render client-only — evita hydration de extensões) */
+.pda-shell-boot {
+  height: 100vh;
+  width: 100%;
+  background: var(--pandora-violet-950);
+}
+
 /* ── Agent Dock (coluna do agente à direita) ── */
 .pda-dock {
+  position: relative;
   flex-shrink: 0;
-  width: 0;
+  width: 56px;            /* trilho recolhido — sempre ancorado ao layout */
   overflow: hidden;
   background: var(--pandora-ink-0);
   border-left: 1px solid var(--pandora-ink-100);
-  transition: width 220ms var(--ease-soft);
+  transition: width 240ms var(--ease-soft);
   color: var(--pandora-ink-800);
   color-scheme: light;
 }
@@ -1028,13 +1044,61 @@ html, body {
   width: 400px;
   box-shadow: var(--shadow-lg);
 }
+
+/* Trilho recolhido: faixa fina, vira affordance clara do agente */
+.pda-dock-rail {
+  position: absolute;
+  inset: 0;
+  width: 56px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 14px;
+  padding: 16px 0;
+  border: none;
+  background: none;
+  cursor: pointer;
+  color: var(--pandora-ink-500);
+  transition: opacity 160ms var(--ease-soft), background 140ms;
+}
+.pda-dock-rail:hover { background: var(--pandora-ink-50); }
+.pda-dock[data-open="true"] .pda-dock-rail {
+  opacity: 0;
+  pointer-events: none;
+}
+.pda-dock-rail-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 40px; height: 40px;
+  border-radius: var(--radius-pill);
+  background: var(--pandora-violet-600);
+  color: #fff;
+  box-shadow: var(--shadow-md);
+  transition: background 140ms var(--ease-soft);
+}
+.pda-dock-rail:hover .pda-dock-rail-icon { background: var(--pandora-violet-500); }
+.pda-dock-rail-label {
+  font-family: var(--font-display, inherit);
+  font-weight: 600;
+  font-size: 11px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  writing-mode: vertical-rl;
+  transform: rotate(180deg);
+  color: var(--pandora-ink-400);
+}
+
 .pda-dock-inner {
   width: 400px;          /* largura fixa do conteúdo p/ não reflowar na animação */
   height: 100%;
   display: flex;
   flex-direction: column;
   min-height: 0;
+  opacity: 0;
+  transition: opacity 160ms var(--ease-soft);
 }
+.pda-dock[data-open="true"] .pda-dock-inner { opacity: 1; }
 .pda-dock-header {
   display: flex;
   align-items: center;
@@ -1061,20 +1125,3 @@ html, body {
 }
 .pda-dock-close:hover { background: var(--pandora-ink-50); color: var(--pandora-ink-800); }
 .pda-dock-body { flex: 1; min-height: 0; }
-
-.pda-dock-fab {
-  position: fixed;
-  right: 20px; bottom: 20px;
-  z-index: 45;
-  width: 52px; height: 52px;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  border: none; cursor: pointer;
-  border-radius: var(--radius-pill);
-  background: var(--pandora-violet-600);
-  color: #fff;
-  box-shadow: var(--shadow-lg);
-  transition: transform 140ms var(--ease-soft), background 140ms;
-}
-.pda-dock-fab:hover { background: var(--pandora-violet-500); transform: translateY(-2px); }

@@ -528,6 +528,10 @@ Caddy config: `/root/pandora-skills/deploy/docs-site/Caddyfile`
 
 - **Atribuição de custo por projeto** ainda em aberto — definir critério (manual? por período? por tag?).
 
+- **Render da área autenticada é client-only.** O `AppShell` (`src/components/AppShell.tsx`) só renderiza o shell após montar no cliente (`useEffect` → `mounted`); antes disso devolve um loader (`.pda-shell-boot`). Motivo: extensões de navegador (ex. Dashlane) injetam atributos `data-*` em inputs/buttons/textareas antes do React hidratar, disparando **hydration mismatch** que `suppressHydrationWarning` não resolve em escala (não cascateia). Sem HTML do servidor para o shell, não há comparação de hidratação. Tradeoff aceito: a área autenticada perde SSR (sem impacto — é atrás de login, sem SEO, e as telas já buscam dados no cliente). Ao criar telas novas dentro de `(app)`, **não** é preciso adicionar `suppressHydrationWarning` em formulários.
+
+- **Agente lateral (`AgentDock`)** é um trilho persistente à direita: recolhido vira faixa de 56px (`.pda-dock-rail`), expande para 400px com o chat. Não há mais FAB flutuante. Em telas `< 768px` o estado aberto vira overlay.
+
 ---
 
 ## Como Manter Este Documento
