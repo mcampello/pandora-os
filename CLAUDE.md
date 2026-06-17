@@ -46,20 +46,23 @@ PRD completo: `/Users/mcampello/Library/CloudStorage/GoogleDrive-mario@campello.
 
 ### Ambientes
 
+**Sistema interno → só PROD.** O ambiente de dev foi aposentado (2026-06-17): container `pandora-os-dev` parado e com `--restart=no`. Todo trabalho é direto em produção.
+
 | Ambiente | URL | Branch | Container | Supabase |
 |----------|-----|--------|-----------|---------|
 | **Produção** | https://app.campello.me | `main` | `pandora-os` | Pandora Zap (`wxvqwzygabzelspdwgcg`) |
-| **Dev** | https://dev.campello.pro | `dev` | `pandora-os-dev` | pandora-os-dev (preencher em `.env.dev`) |
+| ~~Dev~~ (aposentado) | ~~dev.campello.pro~~ | `dev` | `pandora-os-dev` (parado) | — |
 
-**Worktrees no VPS:**
-- `/root/pandora-os` — branch `main` (prod)
-- `/root/pandora-os-dev` — branch `dev` (dev)
+**Worktree no VPS:** `/root/pandora-os` — branch `main` (prod).
 
-**Deploy:**
+**Deploy / aplicar mudanças:**
+O `docker-compose.yml` faz bind mount do código (`.:/app`) e o container roda `npm run build && npm run start` **no start** (não é HMR — `next start`, não `next dev`). Logo, editar arquivo **não** reflete sozinho: é preciso reiniciar para reconstruir.
+
 ```bash
-bash /root/pandora-os/scripts/deploy-prod.sh  # main → app.campello.me
-bash /root/pandora-os/scripts/deploy-dev.sh   # dev  → dev.campello.pro
+docker restart pandora-os    # re-roda build + start contra o código atual do worktree (~1-2 min de downtime)
 ```
+
+⚠️ Se o `npm run build` falhar, o container entra em crash-loop e a prod cai. **Sempre valide antes** com `npm run build` no host (o `.next` do host é volume separado do container, então não atrapalha o container rodando). O script `scripts/deploy-prod.sh` ainda existe mas faz `git pull origin main` primeiro — evite usar com WIP não-commitado no worktree.
 
 ### GitHub
 - Repo: `git@github.com:mcampello/pandora-os.git`
@@ -291,8 +294,10 @@ Identidade unificada que liga email, WhatsApp e reuniões.
 | channel | text | whatsapp / email / calcom / manual / group |
 | confidence | text | very_high / high / medium / low |
 | title, description, raw_content, source_url | text | |
-| status | text | new / qualified / dismissed / converted |
+| status | text | nova / em_contato / proposta / contrato / operacional / perdida |
 | detected_at, qualified_at | timestamptz | |
+| status_changed_at | timestamptz | reiniciado por trigger `trg_opportunities_status_clock` a cada mudança de `status` (alimenta "dias no estágio" / rotting na UI) |
+| qualification | jsonb | BANT + resumo IA do deal: `{ budget/authority/need/timeline: {status: unknown\|partial\|confirmed, notes}, summary, next_steps[], risk, updated_at, ai_generated }`. Preenchido por `POST /api/opportunities/[id]/qualify` (IA lê interactions + WhatsApp) e editável manualmente via PATCH. |
 | converted_to_client_id | uuid | FK clients |
 
 ### `proposals` — propostas (versionadas)
@@ -403,13 +408,25 @@ Múltiplas versões agrupadas por `proposal_group_id`.
 
 | Coluna | Tipo | Notas |
 |--------|------|-------|
-| contact_id | uuid | FK contacts |
+| contact_id | uuid | FK contacts (nullable) |
+| opportunity_id | uuid | FK opportunities (nullable) — usado por comentários de acompanhamento (channel=manual, type=note) ligados direto à oportunidade |
 | channel | text | email / whatsapp / fathom / calcom / manual |
 | type | text | message_in / message_out / meeting / email_in / email_out / booking / note |
 | subject, summary, content | text | |
 | external_id, external_url | text | id/link na fonte |
 | metadata | jsonb | dados específicos do canal |
 | occurred_at | timestamptz | |
+
+### `opportunity_contacts` — pessoas envolvidas numa oportunidade
+Many-to-many oportunidade↔contatos (além do `opportunities.contact_id` principal). O enrichment e a qualificação por IA agregam a atividade (WhatsApp/email/reuniões) de TODAS as pessoas vinculadas — ex: adicionar a advogada faz as mensagens dela entrarem no contexto. Endpoints: `GET/POST/DELETE /api/opportunities/[id]/people`. Comentários: `POST /api/opportunities/[id]/comments`. Busca de contatos p/ o seletor: `GET /api/contacts?q=`.
+
+| Coluna | Tipo | Notas |
+|--------|------|-------|
+| id | uuid | PK |
+| opportunity_id | uuid | FK opportunities (cascade) |
+| contact_id | uuid | FK contacts (cascade) |
+| role | text | papel no deal (ex: jurídico, decisor) |
+| | | UNIQUE(opportunity_id, contact_id) |
 
 ### `connectors` — conexões com serviços externos
 Armazena credenciais e status de cada integração (whatsapp, gmail, gcalendar, calcom, fathom).

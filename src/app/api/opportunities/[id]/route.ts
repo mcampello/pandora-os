@@ -60,6 +60,7 @@ export async function PATCH(
   if (body.contract_model !== undefined) patch.contract_model = body.contract_model || null;
   if (body.company !== undefined)        patch.company        = body.company || null;
   if (body.converted_to_client_id !== undefined) patch.converted_to_client_id = body.converted_to_client_id || null;
+  if (body.qualification !== undefined)  patch.qualification  = body.qualification ?? null;
 
   if (body.status !== undefined) {
     const newStatus = body.status as OpportunityStatus;

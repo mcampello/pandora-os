@@ -111,6 +111,31 @@ export type OpportunityChannel    = 'whatsapp' | 'email' | 'calcom' | 'manual' |
 export type OpportunityConfidence = 'very_high' | 'high' | 'medium' | 'low';
 export type OpportunityStatus     = 'nova' | 'em_contato' | 'proposta' | 'contrato' | 'operacional' | 'perdida';
 
+// Qualificação estilo BANT — cada critério tem um estado + observações
+export type QualificationState = 'unknown' | 'partial' | 'confirmed';
+export type QualificationKey   = 'budget' | 'authority' | 'need' | 'timeline';
+
+export interface QualificationItem {
+  status: QualificationState;
+  notes?: string;
+}
+
+export interface OpportunityQualification {
+  budget?: QualificationItem;
+  authority?: QualificationItem;
+  need?: QualificationItem;
+  timeline?: QualificationItem;
+  /** Resumo do deal gerado pela IA ("qual o status?") */
+  summary?: string;
+  /** Próximos passos sugeridos pela IA */
+  next_steps?: string[];
+  /** Riscos/sinais de alerta identificados pela IA */
+  risk?: string;
+  updated_at?: string;
+  /** true quando o último preenchimento veio da IA */
+  ai_generated?: boolean;
+}
+
 export interface Opportunity {
   id: string;
   contact_id?: string;
@@ -123,11 +148,13 @@ export interface Opportunity {
   status: OpportunityStatus;
   detected_at: string;
   qualified_at?: string;
+  status_changed_at?: string;
   converted_to_client_id?: string;
   notes?: string;
   value?: number;
   contract_model?: string;
   company?: string;
+  qualification?: OpportunityQualification | null;
   created_at: string;
   updated_at: string;
 }
@@ -363,6 +390,7 @@ export type InteractionType    = 'message_in' | 'message_out' | 'meeting' | 'ema
 export interface Interaction {
   id: string;
   contact_id?: string;
+  opportunity_id?: string;
   channel: InteractionChannel;
   type: InteractionType;
   subject?: string;
@@ -372,5 +400,15 @@ export interface Interaction {
   external_url?: string;
   metadata?: Record<string, unknown>;
   occurred_at: string;
+  created_at: string;
+}
+
+// Pessoas envolvidas numa oportunidade (além do contato principal)
+export interface OpportunityContact {
+  id: string;
+  opportunity_id: string;
+  contact_id: string;
+  role?: string;
+  contact?: Pick<Contact, 'id' | 'name' | 'email' | 'phone' | 'company' | 'role'>;
   created_at: string;
 }
