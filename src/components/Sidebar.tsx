@@ -7,7 +7,7 @@ import { useRouter, usePathname } from "next/navigation";
 import {
   LayoutDashboard, Building2, Users, Zap, FileText, ScrollText,
   ClipboardList, Wallet, Settings, ChevronLeft, ChevronRight,
-  ChevronDown, LogOut, Bot,
+  ChevronDown, LogOut, Bot, CheckSquare,
 } from "lucide-react";
 import { clsx } from "clsx";
 import { supabaseBrowser } from "@/lib/supabase-browser";

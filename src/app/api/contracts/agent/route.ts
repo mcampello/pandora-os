@@ -51,73 +51,10 @@ export async function POST(req: NextRequest) {
 
   aiMessages.push(...messages);
 
-  const apiKey = process.env.OPENROUTER_API_KEY;
-  if (!apiKey) return NextResponse.json({ error: "OPENROUTER_API_KEY não configurada" }, { status: 500 });
-
-  let upstreamRes: Response;
-  try {
-    upstreamRes = await fetch(OPENROUTER_URL, {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${apiKey}`,
-        "Content-Type": "application/json",
-        "HTTP-Referer": "https://app.campello.me",
-        "X-Title": "Pandora OS - Dr. Claudio",
-      },
-      body: JSON.stringify({
-        model: AGENT_MODEL,
-        stream: true,
-        messages: aiMessages,
-        temperature: 0.3,
-        max_tokens: 8000,
-      }),
-    });
-  } catch (err) {
-    const msg = err instanceof Error ? err.message : "Erro ao chamar AI";
-    console.error("[contracts/agent] fetch error:", msg);
-    return NextResponse.json({ error: msg }, { status: 500 });
-  }
-
-  if (!upstreamRes.ok) {
-    const errText = await upstreamRes.text();
-    console.error("[contracts/agent] OpenRouter error", upstreamRes.status, errText);
-    return NextResponse.json({ error: `OpenRouter ${upstreamRes.status}: ${errText}` }, { status: 500 });
-  }
-
-  const upstream = upstreamRes.body;
-  if (!upstream) return NextResponse.json({ error: "Sem stream" }, { status: 500 });
-
-  const stream = new ReadableStream({
-    async start(controller) {
-      const reader = upstream.getReader();
-      const dec = new TextDecoder();
-      let buf = "";
-
-      try {
-        while (true) {
-          const { done, value } = await reader.read();
-          if (done) break;
-
-          buf += dec.decode(value, { stream: true });
-          const lines = buf.split("\n");
-          buf = lines.pop() ?? "";
-
-          for (const line of lines) {
-            if (!line.startsWith("data: ")) continue;
-            const json = line.slice(6).trim();
-            if (json === "[DONE]") continue;
-            try {
-              const parsed = JSON.parse(json) as { choices?: Array<{ delta?: { content?: string } }> };
-              const delta = parsed.choices?.[0]?.delta?.content;
-              if (delta) controller.enqueue(new TextEncoder().encode(delta));
-            } catch { /* skip malformed chunks */ }
-          }
-        }
-      } finally {
-        reader.releaseLock();
-        controller.close();
-      }
-    },
+  const response = await ai(aiMessages, {
+    model: "anthropic/claude-sonnet-4-5",
+    temperature: 0.3,
+    max_tokens: 8000,
   });
 
   // Parse contract block from response

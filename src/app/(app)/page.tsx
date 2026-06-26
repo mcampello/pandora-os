@@ -1,5 +1,6 @@
 import { Users, Zap, FileText, Wallet, Clock, AlertCircle } from "lucide-react";
 import { supabaseServer } from "@/lib/supabase-server";
+import TaskBell from "@/components/TaskBell";
 
 interface DashboardData {
   clients_active: number;
@@ -167,67 +168,6 @@ export default async function DashboardPage() {
 
         {/* Two columns */}
         <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 20 }}>
-          {/* Resumo de tarefas por prioridade */}
-          <div className="pda-card">
-            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 16 }}>
-              <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-                <CheckSquare size={14} color="var(--pandora-violet-500)" strokeWidth={1.5} />
-                <span className="pda-eyebrow">Tarefas</span>
-              </div>
-              <Link href="/tarefas" style={{ fontSize: 11, color: "var(--pandora-violet-500)", textDecoration: "none", fontFamily: "var(--font-display)" }}>
-                Ver todas →
-              </Link>
-            </div>
-
-            {loadingTasks ? (
-              <div style={{ fontSize: 12, color: "var(--pandora-ink-400)", padding: "8px 0" }}>Carregando…</div>
-            ) : tasks.length === 0 ? (
-              <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 8, padding: "16px 0", color: "var(--pandora-ink-400)" }}>
-                <AlertCircle size={24} strokeWidth={1} />
-                <span style={{ fontSize: 12 }}>Nenhuma tarefa aberta</span>
-              </div>
-            ) : (
-              <>
-                {/* Resumo de contadores */}
-                <div style={{ display: "flex", gap: 8, marginBottom: 14, flexWrap: "wrap" }}>
-                  {criticalCount > 0 && (
-                    <span style={{ fontSize: 11, background: "rgba(220,38,38,0.1)", color: "#dc2626", borderRadius: 6, padding: "2px 8px", fontFamily: "var(--font-mono)" }}>
-                      {criticalCount} crítica{criticalCount > 1 ? "s" : ""}
-                    </span>
-                  )}
-                  {highCount > 0 && (
-                    <span style={{ fontSize: 11, background: "rgba(217,119,6,0.1)", color: "#d97706", borderRadius: 6, padding: "2px 8px", fontFamily: "var(--font-mono)" }}>
-                      {highCount} alta{highCount > 1 ? "s" : ""}
-                    </span>
-                  )}
-                  <span style={{ fontSize: 11, color: "var(--pandora-ink-400)", fontFamily: "var(--font-mono)" }}>
-                    {tasks.length} total abertas
-                  </span>
-                </div>
-
-                {/* Top 5 tarefas */}
-                <div style={{ display: "flex", flexDirection: "column", gap: 0 }}>
-                  {tasks.slice(0, 5).map((task, i) => (
-                    <div key={task.id} style={{
-                      display: "flex", gap: 10, alignItems: "flex-start",
-                      padding: "8px 0",
-                      borderBottom: i < Math.min(tasks.length, 5) - 1 ? "1px solid var(--pandora-ink-100)" : "none",
-                    }}>
-                      <div style={{
-                        width: 6, height: 6, borderRadius: "50%",
-                        background: PRIORITY_DOT[task.priority] ?? "#9ca3af",
-                        marginTop: 5, flexShrink: 0,
-                      }} />
-                      <span style={{ fontSize: 12, color: "var(--pandora-ink-700)", lineHeight: 1.4 }}>
-                        {task.title}
-                      </span>
-                    </div>
-                  ))}
-                </div>
-              </>
-            )}
-          </div>
-
           {/* Atividade recente */}
           <div className="pda-card">
             <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 16 }}>
