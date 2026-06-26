@@ -33,18 +33,21 @@ afterEach(() => {
   delete process.env.OPENROUTER_API_KEY;
 });
 
-// ── Tool use response (Anthropic content array) ──────────────────────────────
+// ── Tool use response (OpenAI tool_calls format via OpenRouter) ──────────────
+// aiWithTools fala o formato OpenAI: choices[0].message.tool_calls[].function,
+// com arguments como string JSON. Os mocks abaixo refletem esse formato.
 
 describe("aiWithTools — tool_use response", () => {
-  it("parses tool_use block and returns tool_calls", async () => {
+  it("parses tool_calls and returns them", async () => {
     vi.mocked(fetch).mockReturnValueOnce(
       makeResponse({
         choices: [
           {
-            finish_reason: "tool_use",
+            finish_reason: "tool_calls",
             message: {
-              content: [
-                { type: "tool_use", id: "tool_1", name: "get_weather", input: { city: "São Paulo" } },
+              content: "",
+              tool_calls: [
+                { id: "tool_1", type: "function", function: { name: "get_weather", arguments: JSON.stringify({ city: "São Paulo" }) } },
               ],
             },
           },
@@ -54,22 +57,22 @@ describe("aiWithTools — tool_use response", () => {
 
     const result = await aiWithTools(MESSAGES, [TOOL]);
 
-    expect(result.stop_reason).toBe("tool_use");
+    expect(result.stop_reason).toBe("tool_calls");
     expect(result.tool_calls).toHaveLength(1);
     expect(result.tool_calls![0]).toEqual({ id: "tool_1", name: "get_weather", input: { city: "São Paulo" } });
     expect(result.content).toBe("");
   });
 
-  it("captures text blocks alongside tool_use blocks", async () => {
+  it("captures text content alongside tool_calls", async () => {
     vi.mocked(fetch).mockReturnValueOnce(
       makeResponse({
         choices: [
           {
-            finish_reason: "tool_use",
+            finish_reason: "tool_calls",
             message: {
-              content: [
-                { type: "text", text: "Let me check the weather." },
-                { type: "tool_use", id: "tool_2", name: "get_weather", input: { city: "Rio" } },
+              content: "Let me check the weather.",
+              tool_calls: [
+                { id: "tool_2", type: "function", function: { name: "get_weather", arguments: JSON.stringify({ city: "Rio" }) } },
               ],
             },
           },
@@ -84,17 +87,16 @@ describe("aiWithTools — tool_use response", () => {
     expect(result.tool_calls![0].name).toBe("get_weather");
   });
 
-  it("concatenates multiple text blocks", async () => {
+  it("parses tool_call arguments already provided as an object", async () => {
     vi.mocked(fetch).mockReturnValueOnce(
       makeResponse({
         choices: [
           {
-            finish_reason: "tool_use",
+            finish_reason: "tool_calls",
             message: {
-              content: [
-                { type: "text", text: "Hello " },
-                { type: "text", text: "World" },
-                { type: "tool_use", id: "t3", name: "get_weather", input: { city: "Recife" } },
+              content: "",
+              tool_calls: [
+                { id: "t3", type: "function", function: { name: "get_weather", arguments: { city: "Recife" } } },
               ],
             },
           },
@@ -103,7 +105,7 @@ describe("aiWithTools — tool_use response", () => {
     );
 
     const result = await aiWithTools(MESSAGES, [TOOL]);
-    expect(result.content).toBe("Hello World");
+    expect(result.tool_calls![0].input).toEqual({ city: "Recife" });
   });
 
   it("returns multiple tool_calls when model calls more than one tool", async () => {
@@ -111,11 +113,12 @@ describe("aiWithTools — tool_use response", () => {
       makeResponse({
         choices: [
           {
-            finish_reason: "tool_use",
+            finish_reason: "tool_calls",
             message: {
-              content: [
-                { type: "tool_use", id: "t4a", name: "get_weather", input: { city: "Brasília" } },
-                { type: "tool_use", id: "t4b", name: "get_weather", input: { city: "Salvador" } },
+              content: "",
+              tool_calls: [
+                { id: "t4a", type: "function", function: { name: "get_weather", arguments: JSON.stringify({ city: "Brasília" }) } },
+                { id: "t4b", type: "function", function: { name: "get_weather", arguments: JSON.stringify({ city: "Salvador" }) } },
               ],
             },
           },
@@ -147,7 +150,9 @@ describe("aiWithTools — plain text response", () => {
     expect(result.stop_reason).toBe("end_turn");
   });
 
-  it("returns content when response has only text block in array", async () => {
+  it("returns empty content when message.content is not a string (e.g. array)", async () => {
+    // O formato OpenAI usa content como string; se vier um array (não-string),
+    // aiWithTools normaliza para "" em vez de tentar parsear blocos.
     vi.mocked(fetch).mockReturnValueOnce(
       makeResponse({
         choices: [
@@ -161,7 +166,7 @@ describe("aiWithTools — plain text response", () => {
 
     const result = await aiWithTools(MESSAGES, [TOOL]);
 
-    expect(result.content).toBe("No tools needed.");
+    expect(result.content).toBe("");
     expect(result.tool_calls).toBeUndefined();
   });
 
@@ -201,7 +206,13 @@ describe("aiWithTools — request shape", () => {
 
     const [, init] = vi.mocked(fetch).mock.calls[0];
     const body = JSON.parse((init as RequestInit).body as string);
-    expect(body.tools).toEqual([TOOL]);
+    // aiWithTools converte as ToolDefinition para o formato OpenAI antes de enviar.
+    expect(body.tools).toEqual([
+      {
+        type: "function",
+        function: { name: TOOL.name, description: TOOL.description, parameters: TOOL.input_schema },
+      },
+    ]);
     expect(body.messages).toEqual(MESSAGES);
   });
 

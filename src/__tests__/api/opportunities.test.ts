@@ -10,18 +10,20 @@ import { PATCH as patchOpportunity } from "@/app/api/opportunities/[id]/route";
 
 const CONTACT_ID = "contact-uuid-001";
 const OPP_ID = "opp-uuid-001";
+const COMPANY_ID = "company-uuid-001";
 
 function makeOpp(overrides: Record<string, unknown> = {}) {
   return {
     id: OPP_ID,
     contact_id: CONTACT_ID,
+    company_id: COMPANY_ID,
     channel: "email",
     confidence: "high",
     title: "Oportunidade de Serviço",
     description: "Descrição da oportunidade",
     raw_content: null,
     source_url: null,
-    status: "new",
+    status: "nova",
     detected_at: "2025-01-10T00:00:00Z",
     qualified_at: null,
     converted_to_client_id: null,
@@ -73,21 +75,21 @@ describe("GET /api/opportunities", () => {
   });
 
   it("filters by status (single)", async () => {
-    const mock = createSupabaseMock([ok([makeOpp({ status: "qualified" })])]);
+    const mock = createSupabaseMock([ok([makeOpp({ status: "em_contato" })])]);
     vi.mocked(supabaseServer).mockResolvedValue(mock as never);
 
-    await listOpportunities(req("http://localhost/api/opportunities?status=qualified"));
+    await listOpportunities(req("http://localhost/api/opportunities?status=em_contato"));
 
     const chain = mock.from.mock.results[0]?.value as Record<string, { mock: { calls: unknown[][] } }>;
     const eqCalls = (chain.eq as unknown as { mock: { calls: unknown[][] } }).mock.calls;
-    expect(eqCalls.some((args) => args[0] === "status" && args[1] === "qualified")).toBe(true);
+    expect(eqCalls.some((args) => args[0] === "status" && args[1] === "em_contato")).toBe(true);
   });
 
   it("filters by multiple statuses using in()", async () => {
     const mock = createSupabaseMock([ok([makeOpp()])]);
     vi.mocked(supabaseServer).mockResolvedValue(mock as never);
 
-    await listOpportunities(req("http://localhost/api/opportunities?status=new,qualified"));
+    await listOpportunities(req("http://localhost/api/opportunities?status=nova,em_contato"));
 
     const chain = mock.from.mock.results[0]?.value as Record<string, { mock: { calls: unknown[][] } }>;
     const inCalls = (chain.in as unknown as { mock: { calls: unknown[][] } }).mock.calls;
@@ -161,6 +163,7 @@ describe("POST /api/opportunities", () => {
         method: "POST",
         body: {
           contact_id: CONTACT_ID,
+          company_id: COMPANY_ID,
           title: "Oportunidade de Serviço",
           channel: "email",
           confidence: "high",
@@ -181,36 +184,50 @@ describe("POST /api/opportunities", () => {
     const res = await createOpportunity(
       req("http://localhost/api/opportunities", {
         method: "POST",
-        body: { title: "Opp sem contato", channel: "manual", confidence: "low" },
+        body: { title: "Opp sem contato", channel: "manual", confidence: "low", company_id: COMPANY_ID },
       })
     );
     expect(res.status).toBe(201);
     expect((await res.json()).contact_id).toBeNull();
   });
 
-  it("defaults status to 'new' when not provided", async () => {
-    const created = makeOpp({ status: "new" });
-    const mock = createSupabaseMock([ok(created)]);
+  it("requires company_id to create", async () => {
+    const mock = createSupabaseMock([]);
     vi.mocked(supabaseServer).mockResolvedValue(mock as never);
 
     const res = await createOpportunity(
       req("http://localhost/api/opportunities", {
         method: "POST",
-        body: { title: "Opp", channel: "whatsapp", confidence: "medium" },
+        body: { title: "Sem empresa", channel: "email", confidence: "high" }, // missing company_id
       })
     );
-    expect((await res.json()).status).toBe("new");
+    expect(res.status).toBe(400);
+    expect((await res.json()).error).toMatch(/company_id/);
   });
 
-  it("sets qualified_at when created with status 'qualified'", async () => {
-    const created = makeOpp({ status: "qualified", qualified_at: new Date().toISOString() });
+  it("defaults status to 'nova' when not provided", async () => {
+    const created = makeOpp({ status: "nova" });
     const mock = createSupabaseMock([ok(created)]);
     vi.mocked(supabaseServer).mockResolvedValue(mock as never);
 
     const res = await createOpportunity(
       req("http://localhost/api/opportunities", {
         method: "POST",
-        body: { title: "Opp Qualificada", channel: "email", confidence: "very_high", status: "qualified" },
+        body: { title: "Opp", channel: "whatsapp", confidence: "medium", company_id: COMPANY_ID },
+      })
+    );
+    expect((await res.json()).status).toBe("nova");
+  });
+
+  it("sets qualified_at when created with status 'em_contato'", async () => {
+    const created = makeOpp({ status: "em_contato", qualified_at: new Date().toISOString() });
+    const mock = createSupabaseMock([ok(created)]);
+    vi.mocked(supabaseServer).mockResolvedValue(mock as never);
+
+    const res = await createOpportunity(
+      req("http://localhost/api/opportunities", {
+        method: "POST",
+        body: { title: "Opp em contato", channel: "email", confidence: "very_high", status: "em_contato", company_id: COMPANY_ID },
       })
     );
     expect(res.status).toBe(201);
@@ -226,20 +243,20 @@ describe("PATCH /api/opportunities/[id] — status transitions and relations", (
   it("returns 401 when not authenticated", async () => {
     vi.mocked(supabaseServer).mockResolvedValue(createSupabaseMock([], null) as never);
     const res = await patchOpportunity(
-      req(`http://localhost/api/opportunities/${OPP_ID}`, { method: "PATCH", body: { status: "qualified" } }),
+      req(`http://localhost/api/opportunities/${OPP_ID}`, { method: "PATCH", body: { status: "em_contato" } }),
       { params }
     );
     expect(res.status).toBe(401);
   });
 
-  it("sets qualified_at when transitioning to 'qualified'", async () => {
-    const existing = { id: OPP_ID, status: "new", qualified_at: null, contact_id: CONTACT_ID };
-    const updated = makeOpp({ status: "qualified", qualified_at: new Date().toISOString() });
+  it("sets qualified_at when transitioning to 'em_contato'", async () => {
+    const existing = { id: OPP_ID, status: "nova", qualified_at: null, contact_id: CONTACT_ID };
+    const updated = makeOpp({ status: "em_contato", qualified_at: new Date().toISOString() });
     const mock = createSupabaseMock([ok(existing), ok(updated)]);
     vi.mocked(supabaseServer).mockResolvedValue(mock as never);
 
     const res = await patchOpportunity(
-      req(`http://localhost/api/opportunities/${OPP_ID}`, { method: "PATCH", body: { status: "qualified" } }),
+      req(`http://localhost/api/opportunities/${OPP_ID}`, { method: "PATCH", body: { status: "em_contato" } }),
       { params }
     );
     expect(res.status).toBe(200);
@@ -248,65 +265,52 @@ describe("PATCH /api/opportunities/[id] — status transitions and relations", (
 
   it("does not overwrite qualified_at on re-patch", async () => {
     const originalAt = "2025-01-15T08:00:00Z";
-    const existing = { id: OPP_ID, status: "qualified", qualified_at: originalAt, contact_id: CONTACT_ID };
-    const updated = makeOpp({ status: "qualified", qualified_at: originalAt });
+    const existing = { id: OPP_ID, status: "em_contato", qualified_at: originalAt, contact_id: CONTACT_ID };
+    const updated = makeOpp({ status: "em_contato", qualified_at: originalAt });
     const mock = createSupabaseMock([ok(existing), ok(updated)]);
     vi.mocked(supabaseServer).mockResolvedValue(mock as never);
 
     const res = await patchOpportunity(
-      req(`http://localhost/api/opportunities/${OPP_ID}`, { method: "PATCH", body: { status: "qualified" } }),
+      req(`http://localhost/api/opportunities/${OPP_ID}`, { method: "PATCH", body: { status: "em_contato" } }),
       { params }
     );
     expect((await res.json()).qualified_at).toBe(originalAt);
   });
 
-  it("requires contact_id to convert opportunity", async () => {
-    // contact_id is null on existing AND not provided in body
-    const existing = { id: OPP_ID, status: "qualified", qualified_at: "2025-01-01T00:00:00Z", contact_id: null };
-    const mock = createSupabaseMock([ok(existing)]);
-    vi.mocked(supabaseServer).mockResolvedValue(mock as never);
-
-    const res = await patchOpportunity(
-      req(`http://localhost/api/opportunities/${OPP_ID}`, { method: "PATCH", body: { status: "converted" } }),
-      { params }
-    );
-    expect(res.status).toBe(400);
-    expect((await res.json()).error).toContain("contact_id");
-  });
-
-  it("allows conversion when contact_id exists on the record", async () => {
-    const existing = { id: OPP_ID, status: "qualified", qualified_at: "2025-01-01T00:00:00Z", contact_id: CONTACT_ID };
-    const updated = makeOpp({ status: "converted" });
+  it("updates status through the pipeline (e.g. proposta)", async () => {
+    const existing = { id: OPP_ID, status: "em_contato", qualified_at: "2025-01-01T00:00:00Z", contact_id: CONTACT_ID };
+    const updated = makeOpp({ status: "proposta" });
     const mock = createSupabaseMock([ok(existing), ok(updated)]);
     vi.mocked(supabaseServer).mockResolvedValue(mock as never);
 
     const res = await patchOpportunity(
-      req(`http://localhost/api/opportunities/${OPP_ID}`, { method: "PATCH", body: { status: "converted" } }),
+      req(`http://localhost/api/opportunities/${OPP_ID}`, { method: "PATCH", body: { status: "proposta" } }),
       { params }
     );
     expect(res.status).toBe(200);
-    expect((await res.json()).status).toBe("converted");
+    expect((await res.json()).status).toBe("proposta");
   });
 
-  it("allows conversion when contact_id is provided in body (override)", async () => {
-    const newContactId = "contact-uuid-999";
-    const existing = { id: OPP_ID, status: "qualified", qualified_at: "2025-01-01T00:00:00Z", contact_id: null };
-    const updated = makeOpp({ status: "converted", contact_id: newContactId });
+  it("sets converted_to_client_id when provided", async () => {
+    const clientId = "client-uuid-777";
+    const existing = { id: OPP_ID, status: "em_contato", qualified_at: "2025-01-01T00:00:00Z", contact_id: CONTACT_ID };
+    const updated = makeOpp({ status: "operacional", converted_to_client_id: clientId });
     const mock = createSupabaseMock([ok(existing), ok(updated)]);
     vi.mocked(supabaseServer).mockResolvedValue(mock as never);
 
     const res = await patchOpportunity(
       req(`http://localhost/api/opportunities/${OPP_ID}`, {
         method: "PATCH",
-        body: { status: "converted", contact_id: newContactId },
+        body: { converted_to_client_id: clientId },
       }),
       { params }
     );
     expect(res.status).toBe(200);
+    expect((await res.json()).converted_to_client_id).toBe(clientId);
   });
 
   it("links contact_id to the opportunity", async () => {
-    const existing = { id: OPP_ID, status: "new", qualified_at: null, contact_id: null };
+    const existing = { id: OPP_ID, status: "nova", qualified_at: null, contact_id: null };
     const updated = makeOpp({ contact_id: CONTACT_ID });
     const mock = createSupabaseMock([ok(existing), ok(updated)]);
     vi.mocked(supabaseServer).mockResolvedValue(mock as never);
@@ -323,7 +327,7 @@ describe("PATCH /api/opportunities/[id] — status transitions and relations", (
   });
 
   it("unlinks contact_id when empty string passed", async () => {
-    const existing = { id: OPP_ID, status: "new", qualified_at: null, contact_id: CONTACT_ID };
+    const existing = { id: OPP_ID, status: "nova", qualified_at: null, contact_id: CONTACT_ID };
     const updated = makeOpp({ contact_id: null, contact: null });
     const mock = createSupabaseMock([ok(existing), ok(updated)]);
     vi.mocked(supabaseServer).mockResolvedValue(mock as never);
@@ -350,7 +354,7 @@ describe("PATCH /api/opportunities/[id] — status transitions and relations", (
   });
 
   it("returns 400 when no fields to update", async () => {
-    const existing = { id: OPP_ID, status: "new", qualified_at: null, contact_id: null };
+    const existing = { id: OPP_ID, status: "nova", qualified_at: null, contact_id: null };
     const mock = createSupabaseMock([ok(existing)]);
     vi.mocked(supabaseServer).mockResolvedValue(mock as never);
 

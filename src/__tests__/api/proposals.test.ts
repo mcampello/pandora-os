@@ -33,6 +33,7 @@ import {
 const CLIENT_ID = "client-uuid-001";
 const OPP_ID = "opp-uuid-001";
 const PROPOSAL_ID = "prop-uuid-001";
+const COMPANY_ID = "company-uuid-001";
 
 function makeProposal(overrides: Record<string, unknown> = {}) {
   return {
@@ -201,6 +202,7 @@ describe("POST /api/proposals", () => {
         method: "POST",
         body: {
           title: "Proposta Teste",
+          company_id: COMPANY_ID,
           client_id: CLIENT_ID,
           opportunity_id: OPP_ID,
           value: 5000,
@@ -223,7 +225,7 @@ describe("POST /api/proposals", () => {
     const res = await createProposal(
       req("http://localhost/api/proposals", {
         method: "POST",
-        body: { title: "Nova Proposta" },
+        body: { title: "Nova Proposta", company_id: COMPANY_ID },
       })
     );
     const body = await res.json();
@@ -239,7 +241,7 @@ describe("POST /api/proposals", () => {
     const res = await createProposal(
       req("http://localhost/api/proposals", {
         method: "POST",
-        body: { title: "Proposta Independente" },
+        body: { title: "Proposta Independente", company_id: COMPANY_ID },
       })
     );
     expect(res.status).toBe(201);
@@ -256,7 +258,7 @@ describe("POST /api/proposals", () => {
     const res = await createProposal(
       req("http://localhost/api/proposals", {
         method: "POST",
-        body: { title: "Proposta" },
+        body: { title: "Proposta", company_id: COMPANY_ID },
       })
     );
     const body = await res.json();
@@ -270,7 +272,7 @@ describe("POST /api/proposals", () => {
     const res = await createProposal(
       req("http://localhost/api/proposals", {
         method: "POST",
-        body: { title: "Proposta" },
+        body: { title: "Proposta", company_id: COMPANY_ID },
       })
     );
     expect(res.status).toBe(500);
