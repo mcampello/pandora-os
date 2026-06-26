@@ -874,201 +874,234 @@ html, body {
   to   { transform: rotate(360deg); }
 }
 
-/* ── Mermaid diagrams (shared) ──────────────────────────── */
-.pda-mermaid-wrap {
-  margin: 20px 0;
-  display: flex;
-  justify-content: center;
-  overflow-x: auto;
-  border-radius: var(--radius-md, 8px);
-  padding: 20px;
-  background: var(--pandora-ink-25, #faf8ff);
-  border: 1px solid var(--pandora-ink-100);
-}
-.pda-mermaid-wrap svg {
-  max-width: 100%;
-  height: auto;
-  font-family: var(--font-text);
-}
-.pda-mermaid-error {
-  margin: 16px 0;
-  border: 1px dashed var(--pandora-amber-400);
-  border-radius: var(--radius-md, 8px);
-  padding: 16px;
-  background: rgba(255, 200, 60, 0.06);
-}
-.pda-mermaid-error-label {
-  display: block;
-  font-family: var(--font-display);
-  font-size: 11px;
-  font-weight: 600;
-  text-transform: uppercase;
-  letter-spacing: 0.06em;
-  color: var(--pandora-amber-500);
-  margin-bottom: 8px;
-}
-.pda-mermaid-error-code {
-  font-family: var(--font-mono);
-  font-size: 12px;
-  color: var(--pandora-ink-600);
-  white-space: pre-wrap;
-  margin: 0;
-}
-
-/* ────────────────────────────────────────────────────────
-   MOBILE / PWA
-   ──────────────────────────────────────────────────────── */
-
-/* Shell */
-.pda-shell {
-  display: flex;
-  height: 100vh;
-  overflow: hidden;
-}
-
-/* Desktop: bottom nav oculta */
-.pda-bottom-nav,
-.pda-bottom-overlay,
-.pda-bottom-more { display: none; }
-
-@media (max-width: 768px) {
-  /* Esconde sidebar */
-  .pda-side { display: none !important; }
-
-  /* Revela bottom nav */
-  .pda-bottom-nav     { display: flex; }
-  .pda-bottom-overlay { display: block; }
-  .pda-bottom-more    { display: block; }
-
-  /* Dock: trilho fino quando recolhido; aberto vira overlay (não espreme o conteúdo) */
-  .pda-dock[data-open="true"] {
-    position: fixed;
-    top: 0; right: 0; bottom: 0;
-    width: min(400px, 100vw);
-    z-index: 60;
-  }
-}
-
-/* ── Bottom Nav bar ── */
-.pda-bottom-nav {
-  position: fixed;
-  bottom: 0; left: 0; right: 0;
-  height: 60px;
-  background: var(--pandora-violet-950);
-  border-top: 1px solid rgba(255,255,255,0.08);
-  z-index: 100;
-  align-items: stretch;
-  padding: 0 4px;
-  padding-bottom: env(safe-area-inset-bottom);
-}
-
-.pda-bottom-nav-item {
-  flex: 1;
+/* ==========================================================
+   Notion-like Document Editor (dn-) — tela /doc/p|c/[id]
+   Branco, leve, foco total (sem sidebar/dock). Reaproveita
+   a tipografia do viewer e os componentes do painel de IA.
+   ========================================================== */
+.dn-shell {
   display: flex;
   flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  gap: 3px;
-  color: rgba(255,255,255,0.4);
-  font-family: var(--font-display);
-  font-size: 9px;
-  font-weight: 500;
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
-  text-decoration: none;
-  background: none;
-  border: none;
-  cursor: pointer;
-  padding: 0;
-  transition: color 120ms;
-}
-.pda-bottom-nav-item svg { stroke-width: 1.5; }
-.pda-bottom-nav-item.active { color: var(--pandora-violet-400); }
-.pda-bottom-nav-item:hover  { color: rgba(255,255,255,0.75); }
-
-/* ── "Mais" overlay ── */
-.pda-bottom-overlay {
-  position: fixed;
-  inset: 0;
-  background: rgba(0,0,0,0.55);
-  z-index: 110;
+  height: 100vh;
+  overflow: hidden;
+  background: #fff;
+  color: var(--pandora-ink-800);
+  color-scheme: light;
 }
 
-/* ── "Mais" drawer ── */
-.pda-bottom-more {
-  position: fixed;
-  bottom: 60px; left: 0; right: 0;
-  background: var(--pandora-violet-950);
-  border-top: 1px solid rgba(255,255,255,0.1);
-  border-radius: var(--radius-xl) var(--radius-xl) 0 0;
-  z-index: 120;
-  padding: 20px 16px;
-}
-
-.pda-bottom-more-header {
+/* Topbar: breadcrumb + ações */
+.dn-topbar {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  font-family: var(--font-display);
-  font-size: 13px;
-  font-weight: 600;
-  color: rgba(255,255,255,0.75);
-  margin-bottom: 16px;
+  gap: 16px;
+  padding: 0 24px;
+  height: 54px;
+  background: #fff;
+  border-bottom: 1px solid var(--pandora-ink-100);
+  flex-shrink: 0;
 }
-.pda-bottom-more-header button {
-  background: none;
-  border: none;
-  color: rgba(255,255,255,0.4);
-  cursor: pointer;
-  padding: 4px;
+.dn-breadcrumb {
   display: flex;
-}
-
-.pda-bottom-more-grid {
-  display: grid;
-  grid-template-columns: repeat(3, 1fr);
-  gap: 8px;
-}
-
-.pda-bottom-more-item {
-  display: flex;
-  flex-direction: column;
   align-items: center;
   gap: 6px;
-  padding: 14px 8px;
-  background: rgba(255,255,255,0.04);
-  border-radius: var(--radius-md);
-  color: rgba(255,255,255,0.55);
+  min-width: 0;
+  overflow: hidden;
   font-family: var(--font-display);
-  font-size: 10px;
+  font-size: 13px;
   font-weight: 500;
-  letter-spacing: 0.04em;
-  text-decoration: none;
-  transition: background 120ms, color 120ms;
 }
-.pda-bottom-more-item svg { stroke-width: 1.5; }
-.pda-bottom-more-item:hover,
-.pda-bottom-more-item.active {
-  background: rgba(175,77,255,0.15);
-  color: var(--pandora-violet-400);
+.dn-crumb {
+  color: var(--pandora-ink-500);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.dn-crumb-sep {
+  color: var(--pandora-ink-300);
+  flex-shrink: 0;
+}
+.dn-crumb-link {
+  color: var(--pandora-violet-600);
+  text-decoration: none;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 240px;
+  transition: color 0.15s;
+}
+.dn-crumb-link:hover { color: var(--pandora-violet-700); text-decoration: underline; }
+.dn-topbar-actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-shrink: 0;
 }
 
-/* Boot do shell autenticado (render client-only — evita hydration de extensões) */
-.pda-shell-boot {
-  height: 100vh;
+/* Corpo: editor + painel IA */
+.dn-body {
+  display: flex;
+  flex: 1;
+  overflow: hidden;
+}
+.dn-editor {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  background: #fff;
+  min-width: 0;
+}
+
+/* Toolbar de formatação (largura total, fixa no topo do editor) */
+.dn-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  flex-wrap: wrap;
+  padding: 6px 24px;
+  background: #fff;
+  border-bottom: 1px solid var(--pandora-ink-100);
+  flex-shrink: 0;
+}
+.dn-tb-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  height: 30px;
+  border: none;
+  background: transparent;
+  color: var(--pandora-ink-600);
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  transition: background 0.12s, color 0.12s;
+}
+.dn-tb-btn:hover { background: var(--pandora-ink-50); color: var(--pandora-ink-900); }
+.dn-tb-btn.active { background: var(--pandora-violet-600); color: #fff; }
+.dn-tb-btn:disabled { opacity: 0.35; cursor: not-allowed; }
+.dn-tb-sep {
+  width: 1px;
+  height: 18px;
+  background: var(--pandora-ink-100);
+  margin: 0 6px;
+}
+
+/* Área rolável + coluna centralizada (Notion-like) */
+.dn-editor-scroll {
+  flex: 1;
+  overflow-y: auto;
+  background: #fff;
+}
+.dn-doc {
+  max-width: 820px;
+  margin: 0 auto;
+  padding: 48px 32px 96px;
+}
+.dn-title-input {
   width: 100%;
-  background: var(--pandora-violet-950);
+  border: none;
+  outline: none;
+  background: transparent;
+  font-family: var(--font-display);
+  font-size: 32px;
+  font-weight: 700;
+  line-height: 1.2;
+  color: var(--pandora-violet-950);
+  margin-bottom: 20px;
+}
+.dn-title-input::placeholder { color: var(--pandora-ink-200); }
+
+/* Conteúdo do editor (ProseMirror) — herda tipografia do viewer */
+.dn-prose {
+  font-family: var(--font-text);
+  font-size: 16px;
+  line-height: 1.75;
+  color: var(--pandora-ink-800);
+  outline: none;
+  min-height: 320px;
+}
+.dn-prose:focus { outline: none; }
+.dn-prose h1 { font-family: var(--font-display); font-size: 26px; font-weight: 700; margin: 28px 0 14px; color: var(--pandora-violet-950); }
+.dn-prose h2 { font-family: var(--font-display); font-size: 20px; font-weight: 600; margin: 28px 0 10px; color: var(--pandora-violet-900); }
+.dn-prose h3 { font-family: var(--font-display); font-size: 16px; font-weight: 600; margin: 22px 0 8px; color: var(--pandora-violet-800); }
+.dn-prose p { margin: 0 0 14px; }
+.dn-prose ul, .dn-prose ol { padding-left: 24px; margin: 0 0 14px; }
+.dn-prose li { margin: 4px 0; }
+.dn-prose li > p { margin: 0; }
+.dn-prose blockquote { border-left: 3px solid var(--pandora-violet-300); padding: 4px 16px; margin: 14px 0; color: var(--pandora-ink-600); background: var(--pandora-violet-50); border-radius: 0 4px 4px 0; }
+.dn-prose code { font-family: var(--font-mono); font-size: 13px; background: var(--pandora-ink-100); padding: 1px 5px; border-radius: 3px; }
+.dn-prose pre { background: var(--pandora-ink-50); border: 1px solid var(--pandora-ink-100); border-radius: var(--radius-md); padding: 14px 16px; margin: 14px 0; overflow-x: auto; }
+.dn-prose pre code { background: none; padding: 0; font-size: 13px; }
+.dn-prose hr { border: none; border-top: 1px solid var(--pandora-ink-100); margin: 28px 0; }
+.dn-prose strong { font-weight: 600; color: var(--pandora-ink-900); }
+.dn-prose a { color: var(--pandora-violet-600); cursor: pointer; }
+.dn-prose table { width: 100%; border-collapse: collapse; margin: 14px 0; font-size: 14px; }
+.dn-prose th { background: var(--pandora-violet-50); color: var(--pandora-violet-800); font-family: var(--font-display); font-size: 11px; text-transform: uppercase; letter-spacing: 0.04em; padding: 8px 12px; text-align: left; border: 1px solid var(--pandora-violet-100); }
+.dn-prose td { padding: 8px 12px; border: 1px solid var(--pandora-ink-100); vertical-align: top; }
+.dn-prose .selectedCell { background: var(--pandora-violet-50); }
+/* Placeholder do TipTap */
+.dn-prose p.is-editor-empty:first-child::before {
+  content: attr(data-placeholder);
+  color: var(--pandora-ink-300);
+  float: left;
+  height: 0;
+  pointer-events: none;
+}
+
+/* Bubble menu na seleção */
+.dn-bubble {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  padding: 4px;
+  background: #fff;
+  border: 1px solid var(--pandora-ink-100);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-md);
+}
+
+/* Painel IA (discreto, à direita) — reaproveita .de-ai-* internamente */
+.dn-ai-panel {
+  width: 340px;
+  flex-shrink: 0;
+  display: flex;
+  flex-direction: column;
+  background: var(--pandora-ink-50);
+  border-left: 1px solid var(--pandora-ink-100);
+  overflow: hidden;
+}
+
+/* Skeleton enquanto o chunk do TipTap carrega */
+.dn-editor-skeleton {
+  flex: 1;
+  min-height: 320px;
+  background: linear-gradient(90deg, #fff 0%, var(--pandora-ink-25) 50%, #fff 100%);
+  background-size: 200% 100%;
+  animation: dn-shimmer 1.4s ease-in-out infinite;
+}
+@keyframes dn-shimmer {
+  from { background-position: 200% 0; }
+  to   { background-position: -200% 0; }
+}
+
+/* Fonte offscreen usada só para gerar o PDF */
+.dn-print-source {
+  position: absolute;
+  left: -99999px;
+  top: 0;
+  width: 760px;
+  pointer-events: none;
 }
 
 /* ── Agent Dock (coluna do agente à direita) ── */
 .pda-dock {
-  position: relative;
   flex-shrink: 0;
-  width: 56px;            /* trilho recolhido — sempre ancorado ao layout */
+  width: 0;
   overflow: hidden;
   background: var(--pandora-ink-0);
   border-left: 1px solid var(--pandora-ink-100);
-  transition: width 240ms var(--ease-soft);
+  transition: width 220ms var(--ease-soft);
   color: var(--pandora-ink-800);
   color-scheme: light;
 }
@@ -1076,61 +1109,13 @@ html, body {
   width: 400px;
   box-shadow: var(--shadow-lg);
 }
-
-/* Trilho recolhido: faixa fina, vira affordance clara do agente */
-.pda-dock-rail {
-  position: absolute;
-  inset: 0;
-  width: 56px;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 14px;
-  padding: 16px 0;
-  border: none;
-  background: none;
-  cursor: pointer;
-  color: var(--pandora-ink-500);
-  transition: opacity 160ms var(--ease-soft), background 140ms;
-}
-.pda-dock-rail:hover { background: var(--pandora-ink-50); }
-.pda-dock[data-open="true"] .pda-dock-rail {
-  opacity: 0;
-  pointer-events: none;
-}
-.pda-dock-rail-icon {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 40px; height: 40px;
-  border-radius: var(--radius-pill);
-  background: var(--pandora-violet-600);
-  color: #fff;
-  box-shadow: var(--shadow-md);
-  transition: background 140ms var(--ease-soft);
-}
-.pda-dock-rail:hover .pda-dock-rail-icon { background: var(--pandora-violet-500); }
-.pda-dock-rail-label {
-  font-family: var(--font-display, inherit);
-  font-weight: 600;
-  font-size: 11px;
-  letter-spacing: 0.14em;
-  text-transform: uppercase;
-  writing-mode: vertical-rl;
-  transform: rotate(180deg);
-  color: var(--pandora-ink-400);
-}
-
 .pda-dock-inner {
   width: 400px;          /* largura fixa do conteúdo p/ não reflowar na animação */
   height: 100%;
   display: flex;
   flex-direction: column;
   min-height: 0;
-  opacity: 0;
-  transition: opacity 160ms var(--ease-soft);
 }
-.pda-dock[data-open="true"] .pda-dock-inner { opacity: 1; }
 .pda-dock-header {
   display: flex;
   align-items: center;
@@ -1158,9 +1143,19 @@ html, body {
 .pda-dock-close:hover { background: var(--pandora-ink-50); color: var(--pandora-ink-800); }
 .pda-dock-body { flex: 1; min-height: 0; }
 
-@keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
-
-/* Edição inline */
-.pda-inline { cursor: text; border-radius: 5px; padding: 2px 5px; margin: -2px -5px; transition: background 120ms var(--ease-soft); }
-.pda-inline:hover { background: var(--pandora-ink-50); box-shadow: inset 0 0 0 1px var(--pandora-ink-100); }
-.pda-inline-block { display: block; }
+.pda-dock-fab {
+  position: fixed;
+  right: 20px; bottom: 20px;
+  z-index: 50;
+  width: 52px; height: 52px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: none; cursor: pointer;
+  border-radius: var(--radius-pill);
+  background: var(--pandora-violet-600);
+  color: #fff;
+  box-shadow: var(--shadow-lg);
+  transition: transform 140ms var(--ease-soft), background 140ms;
+}
+.pda-dock-fab:hover { background: var(--pandora-violet-500); transform: translateY(-2px); }

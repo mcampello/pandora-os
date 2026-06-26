@@ -111,7 +111,7 @@ async function buildSystemPrompt(
 ): Promise<string> {
   const [{ count: clientsActive }, { count: tasksOpen }, { count: proposalsPending }] = await Promise.all([
     db.from("clients").select("*", { count: "exact", head: true }).eq("status", "active"),
-    db.from("tasks").select("*", { count: "exact", head: true }).in("status", ["open", "in_progress"]),
+    db.from("tasks").select("*", { count: "exact", head: true }).eq("status", "open"),
     db.from("proposals").select("*", { count: "exact", head: true }).in("status", ["draft", "sent", "viewed"]),
   ]);
 

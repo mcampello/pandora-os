@@ -475,7 +475,7 @@ export default function OportunidadeDetailPage({ params }: { params: Promise<{ i
 
   if (!opp) return null;
 
-  const isConverted = opp.status === "operacional";
+  const isConverted = opp.status === "converted";
   const clientId = opp.converted_to_client_id ?? opp.client?.id;
   const statusColor = STATUS_COLOR[opp.status] ?? "var(--pandora-ink-400)";
 

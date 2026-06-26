@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Bot, PanelRightClose } from "lucide-react";
+import { Bot, X } from "lucide-react";
 import AgentChat from "@/components/AgentChat";
 
 const STORAGE_KEY = "pandora.agentDock.open";
@@ -40,48 +40,43 @@ export default function AgentDock() {
     return () => window.removeEventListener(TOGGLE_EVENT, toggle);
   }, []);
 
-  // Antes de hidratar, mantém o trilho recolhido (sem flash do estado salvo).
-  const isOpen = mounted && open;
-
   return (
-    /* Coluna do dock — sempre ancorada à direita; largura anima entre trilho (56) e 400. */
-    <aside className="pda-dock" data-open={isOpen ? "true" : "false"}>
-      {/* Trilho recolhido: faixa fina com o ícone do agente */}
-      <button
-        type="button"
-        className="pda-dock-rail"
-        onClick={() => setOpen(true)}
-        title="Abrir agente Pandora"
-        aria-label="Abrir agente Pandora"
-        aria-hidden={isOpen}
-        tabIndex={isOpen ? -1 : 0}
-      >
-        <span className="pda-dock-rail-icon">
-          <Bot size={20} />
-        </span>
-        <span className="pda-dock-rail-label">Pandora</span>
-      </button>
+    <>
+      {/* FAB — visível quando o dock está fechado */}
+      {mounted && !open && (
+        <button
+          type="button"
+          className="pda-dock-fab"
+          onClick={() => setOpen(true)}
+          title="Abrir agente Pandora"
+          aria-label="Abrir agente Pandora"
+        >
+          <Bot size={22} />
+        </button>
+      )}
 
-      {/* Painel expandido: header + chat */}
-      <div className="pda-dock-inner">
-        <header className="pda-dock-header">
-          <Bot size={15} strokeWidth={1.5} color="var(--pandora-violet-500)" />
-          <span className="pda-dock-title">Pandora</span>
-          <button
-            type="button"
-            className="pda-dock-close"
-            onClick={() => setOpen(false)}
-            title="Recolher agente"
-            aria-label="Recolher agente"
-          >
-            <PanelRightClose size={16} />
-          </button>
-        </header>
-        <div className="pda-dock-body">
-          {/* Monta o chat só quando aberto (hidrata histórico ao abrir) */}
-          {isOpen && <AgentChat />}
+      {/* Coluna do dock — largura anima de 0 → 400 e empurra o conteúdo */}
+      <aside className="pda-dock" data-open={open ? "true" : "false"}>
+        <div className="pda-dock-inner">
+          <header className="pda-dock-header">
+            <Bot size={15} strokeWidth={1.5} color="var(--pandora-violet-500)" />
+            <span className="pda-dock-title">Pandora</span>
+            <button
+              type="button"
+              className="pda-dock-close"
+              onClick={() => setOpen(false)}
+              title="Fechar"
+              aria-label="Fechar agente"
+            >
+              <X size={16} />
+            </button>
+          </header>
+          <div className="pda-dock-body">
+            {/* Monta o chat só quando aberto (hidrata histórico ao abrir) */}
+            {open && <AgentChat />}
+          </div>
         </div>
-      </div>
-    </aside>
+      </aside>
+    </>
   );
 }

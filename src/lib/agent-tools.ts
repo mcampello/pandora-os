@@ -19,7 +19,7 @@ export type ToolResult =
 // Valores válidos no banco (espelham os CHECK constraints reais do Supabase).
 const OPPORTUNITY_STATUSES = ["nova", "em_contato", "proposta", "contrato", "operacional", "perdida"] as const;
 const PROPOSAL_STATUSES = ["draft", "sent", "viewed", "accepted", "rejected", "expired"] as const;
-const TASK_STATUSES = ["open", "in_progress", "done", "dismissed"] as const;
+const TASK_STATUSES = ["open", "done", "dismissed"] as const;
 const TASK_PRIORITIES = ["critical", "high", "medium", "low"] as const;
 const INTERACTION_CHANNELS = ["email", "whatsapp", "fathom", "calcom", "manual"] as const;
 const INTERACTION_TYPES = ["message_in", "message_out", "meeting", "email_in", "email_out", "booking", "note"] as const;
@@ -96,7 +96,7 @@ export const AGENT_TOOL_DEFINITIONS: ToolDefinition[] = [
   {
     name: "list_tasks",
     description:
-      "Lista tarefas/pendências do Mario, opcionalmente filtradas por status ou prioridade. Status: open, in_progress, done, dismissed. Prioridades: critical, high, medium, low.",
+      "Lista tarefas/pendências do Mario, opcionalmente filtradas por status ou prioridade. Status: open, done, dismissed. Prioridades: critical, high, medium, low.",
     input_schema: {
       type: "object",
       properties: {
@@ -169,8 +169,7 @@ export const AGENT_TOOL_DEFINITIONS: ToolDefinition[] = [
     input_schema: {
       type: "object",
       properties: {
-        title: { type: "string", description: "Título curto da tarefa" },
-        description: { type: "string", description: "Detalhes/descrição da tarefa (opcional)" },
+        title: { type: "string", description: "Descrição da tarefa" },
         priority: { type: "string", enum: [...TASK_PRIORITIES], description: "Prioridade (padrão medium)" },
         due_at: { type: "string", description: "Prazo em ISO-8601 (opcional)" },
         entity_type: { type: "string", enum: ["contact", "client", "opportunity", "proposal", "deliverable"], description: "Entidade relacionada (opcional)" },
@@ -517,7 +516,7 @@ export async function executeReadTool(name: string, input: Record<string, unknow
         }
         let q = db
           .from("tasks")
-          .select("id, title, description, status, priority, source, entity_type, entity_id, due_at, created_at")
+          .select("id, title, status, priority, source, entity_type, entity_id, due_at, created_at")
           .eq("status", status)
           .order("due_at", { ascending: true, nullsFirst: false })
           .order("created_at", { ascending: false })
@@ -649,7 +648,6 @@ export async function executeWriteTool(name: string, input: Record<string, unkno
           .from("tasks")
           .insert({
             title,
-            description: str(input, "description") ?? null,
             priority,
             status: "open",
             source: "manual",

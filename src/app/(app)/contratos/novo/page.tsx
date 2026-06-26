@@ -308,8 +308,18 @@ function NovoContratoInner() {
     if (version != null) payload.version = version;
 
     const res = await fetch("/api/contracts", {
-      method: "POST", headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(payload),
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        title: form.title,
+        content_md: contractMd,
+        value: form.value ? parseFloat(form.value) : null,
+        starts_at: form.starts_at || null,
+        ends_at: form.ends_at || null,
+        client_id: (selectedProposal?.client_id ?? clientIdParam) || null,
+        opportunity_id: (selectedProposal?.opportunity_id ?? opportunityIdParam) || null,
+        status: "draft",
+      }),
     });
 
     setSaving(false);

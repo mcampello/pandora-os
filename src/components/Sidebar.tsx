@@ -7,7 +7,7 @@ import { useRouter, usePathname } from "next/navigation";
 import {
   LayoutDashboard, Building2, Users, Zap, FileText, ScrollText,
   ClipboardList, Wallet, Settings, ChevronLeft, ChevronRight,
-  ChevronDown, LogOut, CheckSquare, Bot,
+  ChevronDown, LogOut, Bot,
 } from "lucide-react";
 import { clsx } from "clsx";
 import { supabaseBrowser } from "@/lib/supabase-browser";
@@ -96,6 +96,7 @@ export default function Sidebar() {
         </button>
       </div>
 
+      {/* Agente + Dashboard fora dos grupos */}
       <ul className="pda-nav" style={{ marginTop: 8 }}>
         <li>
           <button

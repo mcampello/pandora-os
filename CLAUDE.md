@@ -33,6 +33,7 @@ PRD completo: `/Users/mcampello/Library/CloudStorage/GoogleDrive-mario@campello.
 | Hospedagem | VPS Ubuntu 24.04 |
 | Versionamento | Git + GitHub |
 | AI (LLMs) | OpenRouter — modelo default: `anthropic/claude-sonnet-4.5` (helper em `src/lib/ai.ts`) |
+| Editor de documentos | TipTap v3 (ProseMirror) + `tiptap-markdown` — WYSIWYG na tela `/doc/p|c/[id]` |
 
 ---
 
@@ -107,14 +108,17 @@ docker restart pandora-os    # re-roda build + start contra o código atual do w
     │   └── uazapi.ts         # Envio de WhatsApp via uazapi
     ├── components/
     │   ├── Sidebar.tsx
-    │   ├── AgentChat.tsx     # Chat do agente central (web)
-    │   ├── DocEditor.tsx
+    │   ├── DocEditor.tsx        # editor markdown/textarea (propostas/contratos [id]) — legado, coexiste
+    │   ├── NotionDocEditor.tsx  # NOVA tela WYSIWYG estilo Notion (breadcrumb + IA), rota /doc
+    │   ├── TiptapEditor.tsx     # editor TipTap v3 (toolbar + BubbleMenu + round-trip markdown)
     │   ├── DocViewerClient.tsx
     │   └── FormUI.tsx
     └── app/
         ├── layout.tsx        # Root layout (html, body, fontes)
         ├── globals.css       # Design system tokens
         ├── login/page.tsx    # Tela de login
+        ├── (focus)/          # Rotas protegidas SEM sidebar/dock (modo foco)
+        │   └── doc/p|c/[id]/ # Editor WYSIWYG Notion-like (NotionDocEditor) p/ proposta|contrato
         ├── (app)/            # Rotas protegidas (requer auth)
         │   ├── layout.tsx    # Shell com Sidebar
         │   ├── page.tsx      # Dashboard
@@ -128,8 +132,7 @@ docker restart pandora-os    # re-roda build + start contra o código atual do w
 │   │   └── [id]/     # Operação full-screen: kanban iniciativas + reuniões
         │   └── configuracoes/conectores/
         ├── api/
-        │   ├── agent/chat/           # POST — agente central (web + telegram)
-        │   ├── dashboard/            # GET — stats + tasks + activity
+        │   ├── dashboard/            # GET — stats + tasks + activity para o dashboard
         │   ├── ai/improve/           # Melhoria de texto via AI
         │   ├── client-documents/[id]/ # Documentos por cliente
         │   ├── clients/[id]/         # CRUD clientes
@@ -431,33 +434,6 @@ Many-to-many oportunidade↔contatos (além do `opportunities.contact_id` princi
 ### `connectors` — conexões com serviços externos
 Armazena credenciais e status de cada integração (whatsapp, gmail, gcalendar, calcom, fathom).
 
-### `task_rules` — regras do agente de tarefas
-Cada regra built-in tem um `rule_key` único. `ai_generation_count` rastreia quantas vezes a AI gerou tarefas com aquela chave. Quando `ai_generation_count >= 3`, `metadata.flagged_for_promotion = true` (banner na UI).
-
-Função SQL: `increment_rule_count(p_rule_key text)` — incrementa contador e atualiza flag.
-
-Regras built-in: `whatsapp_unanswered_6h`, `opportunity_stale_7d`, `proposal_unviewed_5d`, `deliverable_due_3d`, `client_inactive_30d`, `meeting_no_followup_24h`.
-
-### `tasks` — fila de tarefas inteligente
-
-| Coluna | Tipo | Notas |
-|--------|------|-------|
-| id | uuid | PK |
-| title | text | obrigatório |
-| status | text | open / done / dismissed |
-| priority | text | critical / high / medium / low |
-| source | text | manual / rule / ai |
-| rule_key | text | FK task_rules.rule_key (nullable) |
-| entity_type | text | contact / client / opportunity / proposal / deliverable |
-| entity_id | uuid | ID da entidade vinculada |
-| ai_reasoning | text | explicação da AI |
-| dedup_key | text | UNIQUE — impede duplicatas por situação |
-| due_at | timestamptz | prazo opcional |
-| done_at / dismissed_at | timestamptz | timestamps de resolução |
-| metadata | jsonb | dados extras |
-
-RLS: `authenticated` full access + `anon` full access (necessário pois `SUPABASE_SERVICE_ROLE_KEY` não está configurado — admin client cai para anon key; segurança mantida via `AGENT_SECRET` no HTTP).
-
 ### `agent_messages` — histórico de conversa do agente central
 Persistência das mensagens trocadas com o agente (Telegram e Web).
 
@@ -470,7 +446,7 @@ Persistência das mensagens trocadas com o agente (Telegram e Web).
 | tool_calls | jsonb | tool calls pendentes/executados (null se não houver) |
 | created_at | timestamptz | default now() |
 
-Índice `idx_agent_messages_channel_created (channel, created_at DESC)`.
+Índice `idx_agent_messages_channel_created (channel, created_at DESC)` para buscar as últimas N mensagens por canal.
 
 ### `public.documents` — mensagens WhatsApp vetorizadas
 Ingeridas pelo N8N. **Não duplicar esta ingestão.** Tabelas relacionadas: `groups`, `participants`, `group_participants`.
@@ -497,19 +473,18 @@ Todas as tabelas com Row Level Security ativo. Política: `authenticated` tem fu
 - [x] Módulo Operação (/operacao) — índice de clientes ativos com navegação para /operacao/[id]
 - [x] Operação por cliente (/operacao/[id]) — kanban de iniciativas (backlog/active/paused/done) com tarefas ricas (todo/in_progress/blocked/done), painel de reuniões/transcrições, health score, fee e horas no header
 - [x] Portal do cliente (/portal/[slug])
-- [x] Módulo Financeiro (/financeiro) — lista de contratos ativos com KPIs (MRR, NFs pendentes), detalhe por contrato com 4 abas: Cliente (cadastro CNPJ/endereço/responsável), Escopo (markdown + condições), Pessoas (contacts + reuniões Fathom), Faturamento (NFs/invoices CRUD)
-- [x] Sistema de Tarefas Inteligente — agentes de background (`/api/agents/scan` + `/api/agents/ai-scan`), fila priorizada (`/tarefas`), TaskBell no topbar, widget no dashboard, contextual no perfil de contato
-- [x] Sync automático a cada 30 min — crontab no VPS chama `POST /api/sync/all` com `Authorization: Bearer {AGENT_SECRET}` → sincroniza WhatsApp, Gmail e Google Calendar. Log em `/var/log/pandora-sync.log`.
-- [x] Cal.com webhook — `POST /api/connectors/calcom/webhook` processa BOOKING_CREATED/RESCHEDULED em tempo real (registrar URL no Cal.com: `https://app.campello.me/api/connectors/calcom/webhook`).
-- [x] Última atualização real dos contatos — trigger Postgres `trg_interaction_update_contact_channels` atualiza `contacts.last_whatsapp_at/last_email_at/last_meeting_at` a cada INSERT/UPDATE em `interactions`.
-- [x] Agente central como **dock contextual à direita** (`AgentDock`, montado no `AppShell`) — presente em toda tela `(app)`, empurra o conteúdo, persiste estado, abre via FAB ou item "Agente" do Sidebar. Ciente da tela atual (`page_context`) e atualiza a página após escritas (`router.refresh` / navega para o doc criado). Ferramentas de escrita (contato/cliente/oportunidade/proposta/contrato) com confirmação; geração AI de proposta/contrato via `src/lib/doc-generation.ts`.
-- [x] `SUPABASE_SERVICE_ROLE_KEY` configurada em `.env.local` (admin client usa service role e bypassa RLS; políticas `anon` viram redundantes mas seguem inertes)
-- [ ] N8N: configurar 2 HTTP Request nodes — scan (1h) e ai-scan (6h) → `https://app.campello.me/api/agents/*` com `Authorization: Bearer {AGENT_SECRET}`
+- [x] Agente central — núcleo (tool use, `agent_messages`, `POST /api/agent/chat`)
+- [x] Agente como **dock contextual à direita** (`AgentDock`) — presente em toda tela `(app)`,
+      empurra o conteúdo, persiste estado, abre via FAB ou item "Agente" da sidebar
+- [x] Agente ciente da tela atual (`page_context`) + atualiza a página após escritas (`router.refresh` / navega para o doc criado)
+- [x] Agente cria/gerencia: contatos, clientes, pipeline, propostas e contratos (write tools com confirmação; geração AI completa de proposta/contrato)
 - [ ] Gmail OAuth real
 - [ ] Telegram Bot
 - [ ] Detector de oportunidades (AI)
-- [~] Propostas com AI — geração via agente (dock) OK; refinar fluxo no DocEditor
+- [x] Editor de documentos Notion-like (`/doc/p|c/[id]`) — WYSIWYG TipTap v3, breadcrumb empresa›pessoa›oportunidade, IA discreta à direita; coexiste com o DocEditor legado
+- [~] Propostas com AI — geração via agente OK; refinar fluxo no DocEditor
 - [ ] Contratos com versionamento + diff visual (geração via agente OK; falta diff entre versões)
+- [ ] Financeiro (Asaas)
 - [ ] Integração Fathom (reuniões)
 - [ ] Integração Cal.com
 - [ ] Integração Asaas (vincular invoices com Asaas)
@@ -542,6 +517,29 @@ Caddy config: `/root/pandora-skills/deploy/docs-site/Caddyfile`
 - **Supabase** é o único banco. Vetores do WhatsApp já estão lá em base separada.
 
 - **Telegram Bot** será o canal central de alertas — agente conversacional para Mario tirar dúvidas sobre clientes e receber notificações.
+
+- **Agente (dock)**: o agente vive num dock fixo à direita (`src/components/AgentDock.tsx`),
+  montado no `(app)/layout.tsx`, disponível em qualquer tela. O chat (`AgentChat.tsx`) envia
+  `page_context` (rota + entidade em foco) para `POST /api/agent/chat`, que injeta um snapshot
+  da entidade no system prompt — assim "este cliente/esta proposta" funciona sem repetir IDs.
+  Após uma escrita confirmada a tela é atualizada (`router.refresh`); ao criar proposta/contrato,
+  o dock navega para o doc gerado. Ferramentas em `src/lib/agent-tools.ts` (escrita exige
+  confirmação). Geração AI de propostas/contratos centralizada em `src/lib/doc-generation.ts`
+  (server-only — reaproveitada por `/api/proposals/generate` e `/api/contracts/agent`).
+  Rota `/agente` mantida como fallback de tela cheia.
+
+- **Editor de documentos Notion-like** (`/doc/p/[id]` e `/doc/c/[id]`, route group `(focus)`):
+  tela branca, limpa, sem sidebar/dock, com breadcrumb **Empresa › Pessoa › Oportunidade**
+  (resolvido em `src/lib/doc-breadcrumb.ts`) e assistente de IA discreto à direita (reusa
+  `POST /api/ai/improve`). Editor WYSIWYG via **TipTap v3** (`TiptapEditor.tsx`, carregado por
+  `dynamic({ ssr:false })`, `immediatelyRender:false`). **`content_md` (markdown) segue como
+  fonte da verdade** — converte md↔editor com `tiptap-markdown`; export/viewer/IA intactos.
+  O serializador escapa `[`/`]`, então `unescapeDocTokens()` (em `src/lib/docs.ts`) restaura os
+  tokens `[[DATA_ATUAL_EXTENSO]]`/`[data]` ao salvar. Coexiste com o `DocEditor` antigo.
+  ⚠️ **Deploy dev:** as novas deps TipTap precisam entrar no volume `pandora-os-dev-node-modules`
+  (volume nomeado sombreia `node_modules`). Após `git pull`, recriar o volume:
+  `docker compose rm -sf pandora-os-dev && docker volume rm pandora-os_pandora-os-dev-node-modules && docker compose up -d --build pandora-os-dev`
+  (ou `npm install` dentro do container). Sem isso o editor não carrega.
 
 - **Atribuição de custo por projeto** ainda em aberto — definir critério (manual? por período? por tag?).
 
