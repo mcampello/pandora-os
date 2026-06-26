@@ -175,8 +175,8 @@ export default function NovoContratoPage() {
         value: form.value ? parseFloat(form.value) : null,
         starts_at: form.starts_at || null,
         ends_at: form.ends_at || null,
-        client_id: selectedProposal?.client_id ?? clientIdParam || null,
-        opportunity_id: selectedProposal?.opportunity_id ?? opportunityIdParam || null,
+        client_id: (selectedProposal?.client_id ?? clientIdParam) || null,
+        opportunity_id: (selectedProposal?.opportunity_id ?? opportunityIdParam) || null,
         status: "draft",
       }),
     });

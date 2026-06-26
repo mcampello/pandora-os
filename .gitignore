@@ -3,3 +3,7 @@ node_modules/
 .env
 .env.local
 .env*.local
+
+# segredos de ambiente (qualquer .env*) e tooling local
+.env*
+.claude/

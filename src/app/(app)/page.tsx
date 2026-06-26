@@ -1,22 +1,133 @@
-import { Users, Zap, FileText, Wallet, TrendingUp, Clock } from "lucide-react";
+import { Users, Zap, FileText, Wallet, Clock, AlertCircle } from "lucide-react";
+import { supabaseServer } from "@/lib/supabase-server";
 
-const stats = [
-  { label: "Clientes ativos",    value: "3",     sub: "cap. máx 5",        icon: Users,      dot: "pda-dot-green" },
-  { label: "Oportunidades",      value: "—",     sub: "nenhuma detectada",  icon: Zap,        dot: "pda-dot-gray" },
-  { label: "Propostas abertas",  value: "—",     sub: "nenhuma pendente",   icon: FileText,   dot: "pda-dot-gray" },
-  { label: "Receita mensal",     value: "—",     sub: "aguardando dados",   icon: Wallet,     dot: "pda-dot-amber" },
-];
+interface DashboardData {
+  clients_active: number;
+  opportunities_open: number;
+  proposals_pending: number;
+  revenue_monthly: number;
+  tasks_critical: Array<{
+    id: string;
+    title: string;
+    status: string;
+    due_date: string | null;
+    initiative: { title: string; client: { company_name: string } | null } | null;
+  }>;
+  recent_activity: Array<{
+    id: string;
+    channel: string;
+    type: string;
+    subject: string | null;
+    summary: string | null;
+    occurred_at: string;
+    contact: { name: string } | null;
+  }>;
+}
 
-const recentActivity = [
-  { time: "Agora",      text: "Sistema inicializado",              type: "system" },
-  { time: "Em breve",   text: "Monitoramento WhatsApp conectado",  type: "pending" },
-  { time: "Em breve",   text: "Email mario@ sincronizado",         type: "pending" },
-];
+const STATUS_LABEL: Record<string, string> = {
+  todo: "a fazer",
+  in_progress: "em progresso",
+  blocked: "bloqueada",
+};
 
-export default function DashboardPage() {
+const STATUS_DOT: Record<string, string> = {
+  todo: "pda-dot-gray",
+  in_progress: "pda-dot-green",
+  blocked: "pda-dot-amber",
+};
+
+function formatRelative(iso: string) {
+  const diff = Date.now() - new Date(iso).getTime();
+  const m = Math.floor(diff / 60000);
+  if (m < 1) return "Agora";
+  if (m < 60) return `${m}min atrás`;
+  const h = Math.floor(m / 60);
+  if (h < 24) return `${h}h atrás`;
+  const d = Math.floor(h / 24);
+  return `${d}d atrás`;
+}
+
+export default async function DashboardPage() {
+  let data: DashboardData | null = null;
+  try {
+    const supabase = await supabaseServer();
+    const { data: { user } } = await supabase.auth.getUser();
+    if (user) {
+      const [
+        { count: clients_active },
+        { count: opportunities_open },
+        { count: proposals_pending },
+        { data: activeClients },
+        { data: criticalTasks },
+        { data: recentActivity },
+      ] = await Promise.all([
+        supabase.from("clients").select("*", { count: "exact", head: true }).eq("status", "active"),
+        supabase.from("opportunities").select("*", { count: "exact", head: true }).in("status", ["new", "qualified"]),
+        supabase.from("proposals").select("*", { count: "exact", head: true }).in("status", ["draft", "sent", "viewed"]),
+        supabase.from("clients").select("monthly_fee").eq("status", "active"),
+        supabase
+          .from("initiative_tasks")
+          .select("id, title, status, due_date, initiative:initiatives(title, client:clients(company_name))")
+          .in("status", ["todo", "in_progress", "blocked"])
+          .order("due_date", { ascending: true, nullsFirst: false })
+          .limit(5),
+        supabase
+          .from("interactions")
+          .select("id, channel, type, subject, summary, occurred_at, contact:contacts(name)")
+          .order("occurred_at", { ascending: false })
+          .limit(6),
+      ]);
+      const revenue_monthly = (activeClients ?? []).reduce((sum, c) => sum + (c.monthly_fee ?? 0), 0);
+      data = {
+        clients_active: clients_active ?? 0,
+        opportunities_open: opportunities_open ?? 0,
+        proposals_pending: proposals_pending ?? 0,
+        revenue_monthly,
+        tasks_critical: (criticalTasks ?? []) as unknown as DashboardData["tasks_critical"],
+        recent_activity: (recentActivity ?? []) as unknown as DashboardData["recent_activity"],
+      };
+    }
+  } catch {
+    // silently degrade — mostra fallback
+  }
+
+  const stats = [
+    {
+      label: "Clientes ativos",
+      value: data ? String(data.clients_active) : "—",
+      sub: data ? `de ${data.clients_active} ativos` : "carregando...",
+      icon: Users,
+      dot: data && data.clients_active > 0 ? "pda-dot-green" : "pda-dot-gray",
+    },
+    {
+      label: "Oportunidades",
+      value: data ? String(data.opportunities_open) : "—",
+      sub: data ? (data.opportunities_open === 0 ? "nenhuma detectada" : "em aberto") : "carregando...",
+      icon: Zap,
+      dot: data && data.opportunities_open > 0 ? "pda-dot-green" : "pda-dot-gray",
+    },
+    {
+      label: "Propostas abertas",
+      value: data ? String(data.proposals_pending) : "—",
+      sub: data ? (data.proposals_pending === 0 ? "nenhuma pendente" : "aguardando resposta") : "carregando...",
+      icon: FileText,
+      dot: data && data.proposals_pending > 0 ? "pda-dot-amber" : "pda-dot-gray",
+    },
+    {
+      label: "Receita mensal",
+      value: data
+        ? data.revenue_monthly > 0
+          ? `R$ ${data.revenue_monthly.toLocaleString("pt-BR")}`
+          : "R$ 0"
+        : "—",
+      sub: data ? "soma dos clientes ativos" : "carregando...",
+      icon: Wallet,
+      dot: data && data.revenue_monthly > 0 ? "pda-dot-green" : "pda-dot-amber",
+    },
+  ];
+
   return (
     <>
-      {/* Top bar */}
       <header className="pda-topbar">
         <div className="pda-topbar-left">
           <h1 className="pda-topbar-title">Dashboard</h1>
@@ -29,7 +140,6 @@ export default function DashboardPage() {
         </div>
       </header>
 
-      {/* Content */}
       <div className="pda-content">
         {/* Stats grid */}
         <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))", gap: 16, marginBottom: 32 }}>
@@ -42,7 +152,7 @@ export default function DashboardPage() {
                 </div>
               </div>
               <div style={{ display: "flex", alignItems: "baseline", gap: 10 }}>
-                <span style={{ fontFamily: "var(--font-display)", fontSize: 32, fontWeight: 600, color: "var(--pandora-violet-900)", lineHeight: 1 }}>
+                <span style={{ fontFamily: "var(--font-display)", fontSize: 28, fontWeight: 600, color: "var(--pandora-violet-900)", lineHeight: 1 }}>
                   {value}
                 </span>
               </div>
@@ -62,55 +172,63 @@ export default function DashboardPage() {
               <Clock size={14} color="var(--pandora-violet-500)" strokeWidth={1.5} />
               <span className="pda-eyebrow">Atividade recente</span>
             </div>
-            <div style={{ display: "flex", flexDirection: "column", gap: 0 }}>
-              {recentActivity.map((item, i) => (
-                <div key={i} style={{
-                  display: "flex", gap: 12, alignItems: "flex-start",
-                  padding: "10px 0",
-                  borderBottom: i < recentActivity.length - 1 ? "1px solid var(--pandora-ink-100)" : "none"
-                }}>
-                  <span style={{ fontSize: 11, color: "var(--pandora-ink-400)", fontFamily: "var(--font-mono)", whiteSpace: "nowrap", marginTop: 1 }}>
-                    {item.time}
-                  </span>
-                  <span style={{ fontSize: 13, color: item.type === "system" ? "var(--pandora-violet-800)" : "var(--pandora-ink-400)" }}>
-                    {item.text}
-                  </span>
-                </div>
-              ))}
-            </div>
+            {data && data.recent_activity.length > 0 ? (
+              <div style={{ display: "flex", flexDirection: "column", gap: 0 }}>
+                {data.recent_activity.map((item, i) => (
+                  <div key={item.id} style={{
+                    display: "flex", gap: 12, alignItems: "flex-start",
+                    padding: "10px 0",
+                    borderBottom: i < data!.recent_activity.length - 1 ? "1px solid var(--pandora-ink-100)" : "none"
+                  }}>
+                    <span style={{ fontSize: 11, color: "var(--pandora-ink-400)", fontFamily: "var(--font-mono)", whiteSpace: "nowrap", marginTop: 1 }}>
+                      {formatRelative(item.occurred_at)}
+                    </span>
+                    <span style={{ fontSize: 13, color: "var(--pandora-violet-800)" }}>
+                      {item.contact?.name && <strong>{item.contact.name} · </strong>}
+                      {item.subject ?? item.summary ?? item.type}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <p className="pda-empty">Nenhuma interação registrada ainda.</p>
+            )}
           </div>
 
-          {/* Quick access */}
+          {/* Critical tasks */}
           <div className="pda-card">
             <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 16 }}>
-              <TrendingUp size={14} color="var(--pandora-violet-500)" strokeWidth={1.5} />
-              <span className="pda-eyebrow">Próximos passos</span>
+              <AlertCircle size={14} color="var(--pandora-violet-500)" strokeWidth={1.5} />
+              <span className="pda-eyebrow">Tarefas em aberto</span>
             </div>
-            <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-              {[
-                "Conectar Supabase ao sistema",
-                "Configurar monitoramento de email",
-                "Integrar WhatsApp via uazapi",
-                "Configurar Telegram Bot",
-                "Adicionar clientes ativos",
-              ].map((step, i) => (
-                <div key={i} style={{
-                  display: "flex", alignItems: "center", gap: 10,
-                  padding: "8px 0",
-                  borderBottom: i < 4 ? "1px solid var(--pandora-ink-100)" : "none"
-                }}>
-                  <span style={{
-                    width: 20, height: 20, borderRadius: "50%",
-                    background: "var(--pandora-violet-50)",
-                    color: "var(--pandora-violet-600)",
-                    fontFamily: "var(--font-display)", fontSize: 10, fontWeight: 600,
-                    display: "flex", alignItems: "center", justifyContent: "center",
-                    flexShrink: 0
-                  }}>{i + 1}</span>
-                  <span style={{ fontSize: 13, color: "var(--pandora-ink-600)" }}>{step}</span>
-                </div>
-              ))}
-            </div>
+            {data && data.tasks_critical.length > 0 ? (
+              <div style={{ display: "flex", flexDirection: "column", gap: 0 }}>
+                {data.tasks_critical.map((task, i) => (
+                  <div key={task.id} style={{
+                    display: "flex", alignItems: "flex-start", gap: 10,
+                    padding: "10px 0",
+                    borderBottom: i < data!.tasks_critical.length - 1 ? "1px solid var(--pandora-ink-100)" : "none"
+                  }}>
+                    <span className={`pda-dot ${STATUS_DOT[task.status] ?? "pda-dot-gray"}`} style={{ marginTop: 5, flexShrink: 0 }} />
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <span style={{ fontSize: 13, color: "var(--pandora-violet-800)", display: "block", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                        {task.title}
+                      </span>
+                      <span style={{ fontSize: 11, color: "var(--pandora-ink-400)", fontFamily: "var(--font-mono)" }}>
+                        {task.initiative?.client?.company_name ?? task.initiative?.title ?? ""} · {STATUS_LABEL[task.status] ?? task.status}
+                      </span>
+                    </div>
+                    {task.due_date && (
+                      <span style={{ fontSize: 11, color: "var(--pandora-ink-400)", fontFamily: "var(--font-mono)", whiteSpace: "nowrap", flexShrink: 0 }}>
+                        {new Date(task.due_date).toLocaleDateString("pt-BR", { day: "2-digit", month: "short" })}
+                      </span>
+                    )}
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <p className="pda-empty">Nenhuma tarefa em aberto.</p>
+            )}
           </div>
         </div>
       </div>

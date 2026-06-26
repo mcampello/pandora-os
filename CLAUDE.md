@@ -33,6 +33,7 @@ PRD completo: `/Users/mcampello/Library/CloudStorage/GoogleDrive-mario@campello.
 | Hospedagem | VPS Ubuntu 24.04 |
 | Versionamento | Git + GitHub |
 | AI (LLMs) | OpenRouter — modelo default: `anthropic/claude-sonnet-4.5` (helper em `src/lib/ai.ts`) |
+| Editor de documentos | TipTap v3 (ProseMirror) + `tiptap-markdown` — WYSIWYG na tela `/doc/p|c/[id]` |
 
 ---
 
@@ -104,13 +105,17 @@ bash /root/pandora-os/scripts/deploy-dev.sh   # dev  → dev.campello.pro
     │   └── uazapi.ts         # Envio de WhatsApp via uazapi
     ├── components/
     │   ├── Sidebar.tsx
-    │   ├── DocEditor.tsx
+    │   ├── DocEditor.tsx        # editor markdown/textarea (propostas/contratos [id]) — legado, coexiste
+    │   ├── NotionDocEditor.tsx  # NOVA tela WYSIWYG estilo Notion (breadcrumb + IA), rota /doc
+    │   ├── TiptapEditor.tsx     # editor TipTap v3 (toolbar + BubbleMenu + round-trip markdown)
     │   ├── DocViewerClient.tsx
     │   └── FormUI.tsx
     └── app/
         ├── layout.tsx        # Root layout (html, body, fontes)
         ├── globals.css       # Design system tokens
         ├── login/page.tsx    # Tela de login
+        ├── (focus)/          # Rotas protegidas SEM sidebar/dock (modo foco)
+        │   └── doc/p|c/[id]/ # Editor WYSIWYG Notion-like (NotionDocEditor) p/ proposta|contrato
         ├── (app)/            # Rotas protegidas (requer auth)
         │   ├── layout.tsx    # Shell com Sidebar
         │   ├── page.tsx      # Dashboard
@@ -123,6 +128,7 @@ bash /root/pandora-os/scripts/deploy-dev.sh   # dev  → dev.campello.pro
 │   │   └── [id]/     # Operação full-screen: kanban iniciativas + reuniões
         │   └── configuracoes/conectores/
         ├── api/
+        │   ├── dashboard/            # GET — stats + tasks + activity para o dashboard
         │   ├── ai/improve/           # Melhoria de texto via AI
         │   ├── client-documents/[id]/ # Documentos por cliente
         │   ├── clients/[id]/         # CRUD clientes
@@ -360,6 +366,20 @@ Múltiplas versões agrupadas por `proposal_group_id`.
 ### `connectors` — conexões com serviços externos
 Armazena credenciais e status de cada integração (whatsapp, gmail, gcalendar, calcom, fathom).
 
+### `agent_messages` — histórico de conversa do agente central
+Persistência das mensagens trocadas com o agente (Telegram e Web).
+
+| Coluna | Tipo | Notas |
+|--------|------|-------|
+| id | uuid | PK |
+| channel | text | `telegram` / `web` (CHECK) |
+| role | text | `user` / `assistant` (CHECK) |
+| content | text | obrigatório |
+| tool_calls | jsonb | tool calls pendentes/executados (null se não houver) |
+| created_at | timestamptz | default now() |
+
+Índice `idx_agent_messages_channel_created (channel, created_at DESC)` para buscar as últimas N mensagens por canal.
+
 ### `public.documents` — mensagens WhatsApp vetorizadas
 Ingeridas pelo N8N. **Não duplicar esta ingestão.** Tabelas relacionadas: `groups`, `participants`, `group_participants`.
 
@@ -385,11 +405,17 @@ Todas as tabelas com Row Level Security ativo. Política: `authenticated` tem fu
 - [x] Módulo Operação (/operacao) — índice de clientes ativos com navegação para /operacao/[id]
 - [x] Operação por cliente (/operacao/[id]) — kanban de iniciativas (backlog/active/paused/done) com tarefas ricas (todo/in_progress/blocked/done), painel de reuniões/transcrições, health score, fee e horas no header
 - [x] Portal do cliente (/portal/[slug])
+- [x] Agente central — núcleo (tool use, `agent_messages`, `POST /api/agent/chat`)
+- [x] Agente como **dock contextual à direita** (`AgentDock`) — presente em toda tela `(app)`,
+      empurra o conteúdo, persiste estado, abre via FAB ou item "Agente" da sidebar
+- [x] Agente ciente da tela atual (`page_context`) + atualiza a página após escritas (`router.refresh` / navega para o doc criado)
+- [x] Agente cria/gerencia: contatos, clientes, pipeline, propostas e contratos (write tools com confirmação; geração AI completa de proposta/contrato)
 - [ ] Gmail OAuth real
 - [ ] Telegram Bot
 - [ ] Detector de oportunidades (AI)
-- [ ] Propostas com AI (geração completa)
-- [ ] Contratos com versionamento + diff visual
+- [x] Editor de documentos Notion-like (`/doc/p|c/[id]`) — WYSIWYG TipTap v3, breadcrumb empresa›pessoa›oportunidade, IA discreta à direita; coexiste com o DocEditor legado
+- [~] Propostas com AI — geração via agente OK; refinar fluxo no DocEditor
+- [ ] Contratos com versionamento + diff visual (geração via agente OK; falta diff entre versões)
 - [ ] Financeiro (Asaas)
 - [ ] Integração Fathom (reuniões)
 - [ ] Integração Cal.com
@@ -421,6 +447,29 @@ Caddy config: `/root/pandora-skills/deploy/docs-site/Caddyfile`
 - **Supabase** é o único banco. Vetores do WhatsApp já estão lá em base separada.
 
 - **Telegram Bot** será o canal central de alertas — agente conversacional para Mario tirar dúvidas sobre clientes e receber notificações.
+
+- **Agente (dock)**: o agente vive num dock fixo à direita (`src/components/AgentDock.tsx`),
+  montado no `(app)/layout.tsx`, disponível em qualquer tela. O chat (`AgentChat.tsx`) envia
+  `page_context` (rota + entidade em foco) para `POST /api/agent/chat`, que injeta um snapshot
+  da entidade no system prompt — assim "este cliente/esta proposta" funciona sem repetir IDs.
+  Após uma escrita confirmada a tela é atualizada (`router.refresh`); ao criar proposta/contrato,
+  o dock navega para o doc gerado. Ferramentas em `src/lib/agent-tools.ts` (escrita exige
+  confirmação). Geração AI de propostas/contratos centralizada em `src/lib/doc-generation.ts`
+  (server-only — reaproveitada por `/api/proposals/generate` e `/api/contracts/agent`).
+  Rota `/agente` mantida como fallback de tela cheia.
+
+- **Editor de documentos Notion-like** (`/doc/p/[id]` e `/doc/c/[id]`, route group `(focus)`):
+  tela branca, limpa, sem sidebar/dock, com breadcrumb **Empresa › Pessoa › Oportunidade**
+  (resolvido em `src/lib/doc-breadcrumb.ts`) e assistente de IA discreto à direita (reusa
+  `POST /api/ai/improve`). Editor WYSIWYG via **TipTap v3** (`TiptapEditor.tsx`, carregado por
+  `dynamic({ ssr:false })`, `immediatelyRender:false`). **`content_md` (markdown) segue como
+  fonte da verdade** — converte md↔editor com `tiptap-markdown`; export/viewer/IA intactos.
+  O serializador escapa `[`/`]`, então `unescapeDocTokens()` (em `src/lib/docs.ts`) restaura os
+  tokens `[[DATA_ATUAL_EXTENSO]]`/`[data]` ao salvar. Coexiste com o `DocEditor` antigo.
+  ⚠️ **Deploy dev:** as novas deps TipTap precisam entrar no volume `pandora-os-dev-node-modules`
+  (volume nomeado sombreia `node_modules`). Após `git pull`, recriar o volume:
+  `docker compose rm -sf pandora-os-dev && docker volume rm pandora-os_pandora-os-dev-node-modules && docker compose up -d --build pandora-os-dev`
+  (ou `npm install` dentro do container). Sem isso o editor não carrega.
 
 - **Atribuição de custo por projeto** ainda em aberto — definir critério (manual? por período? por tag?).
 

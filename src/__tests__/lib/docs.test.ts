@@ -3,6 +3,7 @@ import {
   formatBRL,
   fmtDate,
   applyDynamicTokens,
+  unescapeDocTokens,
   proposalViewerUrl,
   contractViewerUrl,
   PROPOSAL_STATUS_LABEL,
@@ -93,6 +94,45 @@ describe("applyDynamicTokens", () => {
     const parts = result.split(" e também ");
     expect(parts).toHaveLength(2);
     expect(parts[0]).toBe(parts[1]);
+  });
+});
+
+// ── unescapeDocTokens ─────────────────────────────────────────────────────
+// O serializador de markdown do editor (prosemirror-markdown) escapa `[` e `]`
+// como `\[` `\]`. unescapeDocTokens restaura os tokens dinâmicos para a forma crua.
+
+describe("unescapeDocTokens", () => {
+  it("restores escaped [[DATA_ATUAL_EXTENSO]]", () => {
+    // forma exata que o serializador produz (underscores entre letras NÃO são escapados)
+    const escaped = "Emitido em \\[\\[DATA_ATUAL_EXTENSO\\]\\].";
+    expect(unescapeDocTokens(escaped)).toBe("Emitido em [[DATA_ATUAL_EXTENSO]].");
+  });
+
+  it("restores escaped [data]", () => {
+    expect(unescapeDocTokens("Assinado em \\[data\\].")).toBe("Assinado em [data].");
+  });
+
+  it("restores escaped [ data de janeiro de 2020 ]", () => {
+    expect(unescapeDocTokens("\\[ data de janeiro de 2020 \\]")).toBe("[ data de janeiro de 2020 ]");
+  });
+
+  it("leaves already-clean tokens unchanged", () => {
+    const clean = "[[DATA_ATUAL_EXTENSO]] e [data]";
+    expect(unescapeDocTokens(clean)).toBe(clean);
+  });
+
+  it("end-to-end: escaped token survives serialização e vira data no applyDynamicTokens", () => {
+    const fromEditor = "Documento de \\[\\[DATA_ATUAL_EXTENSO\\]\\] válido.";
+    const restored = unescapeDocTokens(fromEditor);
+    const final = applyDynamicTokens(restored);
+    expect(final).not.toContain("DATA_ATUAL_EXTENSO");
+    expect(final).not.toContain("\\[");
+    expect(final).toContain(new Date().getFullYear().toString());
+  });
+
+  it("não toca em colchetes escapados que não são tokens", () => {
+    const other = "ver nota \\[1\\] abaixo";
+    expect(unescapeDocTokens(other)).toBe(other);
   });
 });
 

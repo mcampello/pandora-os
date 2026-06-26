@@ -60,6 +60,18 @@ export function applyDynamicTokens(md: string): string {
     .replace(/\[\s*data\s*\](?:\s*de\s*[A-Za-zÀ-ÿ]+\s*de\s*\d{4})?/gi, longDate);
 }
 
+/**
+ * Restaura tokens dinâmicos que o serializador de markdown do editor (prosemirror-markdown)
+ * escapa ao converter o documento de volta para markdown — ele escapa `[` e `]` como `\[` `\]`.
+ * Sem isso, `[[DATA_ATUAL_EXTENSO]]` viraria `\[\[DATA_ATUAL_EXTENSO\]\]` e o applyDynamicTokens
+ * não substituiria mais pela data. Mantém os tokens "crus" e válidos no content_md.
+ */
+export function unescapeDocTokens(md: string): string {
+  return md
+    .replace(/\\\[\\\[DATA_ATUAL_EXTENSO\\\]\\\]/g, "[[DATA_ATUAL_EXTENSO]]")
+    .replace(/\\\[(\s*data\b[^\]]*?)\\\]/gi, "[$1]");
+}
+
 // ── Shared input style ────────────────────────────────
 export const inputStyle: CSSProperties = {
   border: "1px solid var(--pandora-ink-200)",

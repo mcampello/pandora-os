@@ -77,7 +77,7 @@ export async function PATCH(
           let clientId = opp.converted_to_client_id as string | null;
 
           if (!clientId) {
-            const contact = opp.contact as { id: string; name: string; company?: string; company_id?: string } | null;
+            const contact = opp.contact as unknown as { id: string; name: string; company?: string; company_id?: string } | null;
             const { data: client } = await supabase
               .from("clients")
               .insert({

@@ -8,6 +8,8 @@
 
 import { supabaseAdmin } from "@/lib/supabase-admin";
 import type { ToolDefinition } from "@/lib/ai";
+import { generateProposalMarkdown, generateContractMarkdown } from "@/lib/doc-generation";
+import { proposalViewerUrl, contractViewerUrl } from "@/lib/docs";
 
 // Resultado padronizado de qualquer executor.
 export type ToolResult =
@@ -21,6 +23,7 @@ const TASK_STATUSES = ["open", "done", "dismissed"] as const;
 const TASK_PRIORITIES = ["critical", "high", "medium", "low"] as const;
 const INTERACTION_CHANNELS = ["email", "whatsapp", "fathom", "calcom", "manual"] as const;
 const INTERACTION_TYPES = ["message_in", "message_out", "meeting", "email_in", "email_out", "booking", "note"] as const;
+const CLIENT_STATUSES = ["prospect", "active", "paused", "former"] as const;
 
 // ────────────────────────────────────────────
 // Definições (passadas ao Claude via aiWithTools)
@@ -215,6 +218,104 @@ export const AGENT_TOOL_DEFINITIONS: ToolDefinition[] = [
       required: ["id", "status"],
     },
   },
+  {
+    name: "create_contact",
+    description:
+      "Cria um novo contato (pessoa/empresa) no CRM. REQUER CONFIRMAÇÃO. Use antes de criar um cliente se o contato ainda não existir.",
+    input_schema: {
+      type: "object",
+      properties: {
+        name: { type: "string", description: "Nome do contato (obrigatório)" },
+        email: { type: "string", description: "Email (opcional)" },
+        phone: { type: "string", description: "Telefone (opcional)" },
+        company: { type: "string", description: "Empresa (opcional)" },
+        role: { type: "string", description: "Cargo (opcional)" },
+        source: { type: "string", description: "Origem: whatsapp, email, fathom, calcom, manual, indication (padrão manual)" },
+      },
+      required: ["name"],
+    },
+  },
+  {
+    name: "create_client",
+    description:
+      "Cria um cliente (relacionamento comercial) a partir de um contato existente. REQUER CONFIRMAÇÃO. Status inicial padrão 'prospect'.",
+    input_schema: {
+      type: "object",
+      properties: {
+        contact_id: { type: "string", description: "UUID do contato (opcional se informar company_name)" },
+        company_name: { type: "string", description: "Nome de exibição do cliente (obrigatório se não houver contact_id)" },
+        status: { type: "string", enum: [...CLIENT_STATUSES], description: "Status (padrão prospect)" },
+        monthly_fee: { type: "number", description: "Fee mensal em R$ (opcional)" },
+        dedication_hours: { type: "number", description: "Horas/mês dedicadas (opcional)" },
+      },
+    },
+  },
+  {
+    name: "update_client",
+    description:
+      "Atualiza dados comerciais de um cliente (status, fee, horas, datas de contrato). REQUER CONFIRMAÇÃO. Para o health score use update_client_health.",
+    input_schema: {
+      type: "object",
+      properties: {
+        client_id: { type: "string", description: "UUID do cliente" },
+        status: { type: "string", enum: [...CLIENT_STATUSES], description: "Novo status (opcional)" },
+        monthly_fee: { type: "number", description: "Novo fee mensal em R$ (opcional)" },
+        dedication_hours: { type: "number", description: "Novas horas/mês (opcional)" },
+        contract_start: { type: "string", description: "Início do contrato (YYYY-MM-DD, opcional)" },
+        contract_end: { type: "string", description: "Fim do contrato (YYYY-MM-DD, opcional)" },
+      },
+      required: ["client_id"],
+    },
+  },
+  {
+    name: "update_opportunity",
+    description:
+      "Edita campos de uma oportunidade (título, valor, descrição). REQUER CONFIRMAÇÃO. Para mudar o status use update_opportunity_status.",
+    input_schema: {
+      type: "object",
+      properties: {
+        id: { type: "string", description: "UUID da oportunidade" },
+        title: { type: "string", description: "Novo título (opcional)" },
+        value: { type: "number", description: "Novo valor estimado em R$ (opcional)" },
+        description: { type: "string", description: "Nova descrição (opcional)" },
+      },
+      required: ["id"],
+    },
+  },
+  {
+    name: "create_proposal",
+    description:
+      "Cria uma proposta comercial em rascunho. REQUER CONFIRMAÇÃO. Por padrão (generate=true) gera o conteúdo completo em Markdown via AI. Informe client_id ou company_name para vincular ao cliente.",
+    input_schema: {
+      type: "object",
+      properties: {
+        title: { type: "string", description: "Título da proposta (obrigatório)" },
+        client_id: { type: "string", description: "UUID do cliente (opcional)" },
+        company_name: { type: "string", description: "Nome do cliente para vincular (alternativa ao client_id)" },
+        value: { type: "number", description: "Valor da proposta em R$ (opcional)" },
+        context: { type: "string", description: "Contexto/instruções extras para a geração (opcional)" },
+        generate: { type: "boolean", description: "Gerar o conteúdo via AI (padrão true). Se false, cria só o rascunho vazio." },
+      },
+      required: ["title"],
+    },
+  },
+  {
+    name: "create_contract",
+    description:
+      "Cria um contrato em rascunho. REQUER CONFIRMAÇÃO. Por padrão (generate=true) gera o texto jurídico completo (padrão brasileiro) via AI. Informe client_id ou company_name para vincular.",
+    input_schema: {
+      type: "object",
+      properties: {
+        title: { type: "string", description: "Título/objeto do contrato (obrigatório)" },
+        client_id: { type: "string", description: "UUID do cliente (opcional)" },
+        company_name: { type: "string", description: "Nome do cliente para vincular (alternativa ao client_id)" },
+        value: { type: "number", description: "Valor do contrato em R$ (opcional)" },
+        context: { type: "string", description: "Contexto/instruções extras para a geração (opcional)" },
+        generate: { type: "boolean", description: "Gerar o texto via AI (padrão true). Se false, cria só o rascunho vazio." },
+      },
+      required: ["title"],
+    },
+  },
 ];
 
 // ────────────────────────────────────────────
@@ -228,6 +329,12 @@ export const WRITE_TOOLS = new Set<string>([
   "update_opportunity_status",
   "update_client_health",
   "update_proposal_status",
+  "create_contact",
+  "create_client",
+  "update_client",
+  "update_opportunity",
+  "create_proposal",
+  "create_contract",
 ]);
 
 export function isWriteTool(name: string): boolean {
@@ -256,6 +363,32 @@ function num(input: Record<string, unknown>, key: string): number | undefined {
   if (typeof v === "number" && Number.isFinite(v)) return v;
   if (typeof v === "string" && v.trim() !== "" && Number.isFinite(Number(v))) return Number(v);
   return undefined;
+}
+
+function bool(input: Record<string, unknown>, key: string): boolean | undefined {
+  const v = input[key];
+  if (typeof v === "boolean") return v;
+  if (typeof v === "string") return v === "true" ? true : v === "false" ? false : undefined;
+  return undefined;
+}
+
+// Resolve um client_id a partir do id direto ou do nome da empresa.
+async function resolveClientId(
+  db: ReturnType<typeof supabaseAdmin>,
+  input: Record<string, unknown>
+): Promise<string | undefined> {
+  const direct = str(input, "client_id");
+  if (direct) return direct;
+  const name = str(input, "company_name");
+  if (!name) return undefined;
+  const { data } = await db
+    .from("clients")
+    .select("id")
+    .ilike("company_name", `%${sanitizeLike(name)}%`)
+    .order("updated_at", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+  return data?.id;
 }
 
 function intLimit(input: Record<string, unknown>, fallback: number, max = 50): number {
@@ -586,6 +719,166 @@ export async function executeWriteTool(name: string, input: Record<string, unkno
         if (error) return fail(error.message);
         if (!data) return fail("Proposta não encontrada");
         return ok(data);
+      }
+
+      case "create_contact": {
+        const name2 = str(input, "name");
+        if (!name2) return fail("name é obrigatório");
+        const { data, error } = await db
+          .from("contacts")
+          .insert({
+            name: name2,
+            email: str(input, "email") ?? null,
+            phone: str(input, "phone") ?? null,
+            company: str(input, "company") ?? null,
+            role: str(input, "role") ?? null,
+            source: str(input, "source") ?? "manual",
+          })
+          .select("id, name, email, company")
+          .single();
+        if (error) return fail(error.message);
+        return ok(data);
+      }
+
+      case "create_client": {
+        const contactId = str(input, "contact_id");
+        let companyName = str(input, "company_name");
+        if (!contactId && !companyName) return fail("Informe contact_id ou company_name");
+        // Deriva o nome de exibição a partir do contato, se necessário.
+        if (!companyName && contactId) {
+          const { data: c } = await db.from("contacts").select("name, company").eq("id", contactId).maybeSingle();
+          companyName = c?.company ?? c?.name ?? "Novo cliente";
+        }
+        const status = str(input, "status") ?? "prospect";
+        if (!(CLIENT_STATUSES as readonly string[]).includes(status)) {
+          return fail(`status inválido. Use: ${CLIENT_STATUSES.join(", ")}`);
+        }
+        const { data, error } = await db
+          .from("clients")
+          .insert({
+            contact_id: contactId ?? null,
+            company_name: companyName,
+            status,
+            monthly_fee: num(input, "monthly_fee") ?? null,
+            dedication_hours: num(input, "dedication_hours") ?? null,
+          })
+          .select("id, company_name, status, monthly_fee")
+          .single();
+        if (error) return fail(error.message);
+        return ok(data);
+      }
+
+      case "update_client": {
+        const clientId = str(input, "client_id");
+        if (!clientId) return fail("client_id é obrigatório");
+        const update: Record<string, unknown> = { updated_at: new Date().toISOString() };
+        const status = str(input, "status");
+        if (status) {
+          if (!(CLIENT_STATUSES as readonly string[]).includes(status)) {
+            return fail(`status inválido. Use: ${CLIENT_STATUSES.join(", ")}`);
+          }
+          update.status = status;
+        }
+        const fee = num(input, "monthly_fee");
+        if (fee !== undefined) update.monthly_fee = fee;
+        const hours = num(input, "dedication_hours");
+        if (hours !== undefined) update.dedication_hours = hours;
+        const cstart = str(input, "contract_start");
+        if (cstart) update.contract_start = cstart;
+        const cend = str(input, "contract_end");
+        if (cend) update.contract_end = cend;
+        if (Object.keys(update).length === 1) return fail("Nenhum campo para atualizar");
+        const { data, error } = await db
+          .from("clients")
+          .update(update)
+          .eq("id", clientId)
+          .select("id, company_name, status, monthly_fee, dedication_hours, contract_start, contract_end")
+          .maybeSingle();
+        if (error) return fail(error.message);
+        if (!data) return fail("Cliente não encontrado");
+        return ok(data);
+      }
+
+      case "update_opportunity": {
+        const id = str(input, "id");
+        if (!id) return fail("id é obrigatório");
+        const update: Record<string, unknown> = { updated_at: new Date().toISOString() };
+        const title = str(input, "title");
+        if (title) update.title = title;
+        const value = num(input, "value");
+        if (value !== undefined) update.value = value;
+        const description = str(input, "description");
+        if (description) update.description = description;
+        if (Object.keys(update).length === 1) return fail("Nenhum campo para atualizar");
+        const { data, error } = await db
+          .from("opportunities")
+          .update(update)
+          .eq("id", id)
+          .select("id, title, status, value")
+          .maybeSingle();
+        if (error) return fail(error.message);
+        if (!data) return fail("Oportunidade não encontrada");
+        return ok(data);
+      }
+
+      case "create_proposal": {
+        const title = str(input, "title");
+        if (!title) return fail("title é obrigatório");
+        const clientId = await resolveClientId(db, input);
+        const shouldGenerate = bool(input, "generate") !== false; // default true
+        let content_md: string | null = null;
+        if (shouldGenerate) {
+          try {
+            content_md = await generateProposalMarkdown(title, str(input, "context"));
+          } catch (e) {
+            return fail(`Falha ao gerar a proposta: ${e instanceof Error ? e.message : String(e)}`);
+          }
+        }
+        // proposal_group_id/version têm default no DB (igual à rota POST /api/proposals).
+        const { data, error } = await db
+          .from("proposals")
+          .insert({
+            title,
+            client_id: clientId ?? null,
+            value: num(input, "value") ?? null,
+            content_md,
+            status: "draft",
+          })
+          .select("id, title, status, value, client_id")
+          .single();
+        if (error) return fail(error.message);
+        await db.from("proposals").update({ viewer_url: proposalViewerUrl(data.id) }).eq("id", data.id);
+        return ok({ ...data, navigate_to: `/propostas/${data.id}`, generated: shouldGenerate });
+      }
+
+      case "create_contract": {
+        const title = str(input, "title");
+        if (!title) return fail("title é obrigatório");
+        const clientId = await resolveClientId(db, input);
+        const shouldGenerate = bool(input, "generate") !== false; // default true
+        let content_md: string | null = null;
+        if (shouldGenerate) {
+          try {
+            content_md = await generateContractMarkdown(title, str(input, "context"));
+          } catch (e) {
+            return fail(`Falha ao gerar o contrato: ${e instanceof Error ? e.message : String(e)}`);
+          }
+        }
+        // contract_group_id/version têm default no DB (igual à rota POST /api/contracts).
+        const { data, error } = await db
+          .from("contracts")
+          .insert({
+            title,
+            client_id: clientId ?? null,
+            value: num(input, "value") ?? null,
+            content_md,
+            status: "draft",
+          })
+          .select("id, title, status, value, client_id")
+          .single();
+        if (error) return fail(error.message);
+        await db.from("contracts").update({ viewer_url: contractViewerUrl(data.id) }).eq("id", data.id);
+        return ok({ ...data, navigate_to: `/contratos/${data.id}`, generated: shouldGenerate });
       }
 
       default:

@@ -31,6 +31,7 @@ export async function POST() {
     const { data, error } = await supabase
       .from("documents").select("metadata")
       .like("metadata->>chatId", "%@s.whatsapp.net")
+      .order("id", { ascending: true })
       .range(offset, offset + pageSize - 1);
 
     if (error) return NextResponse.json({ error: error.message }, { status: 500 });
@@ -50,7 +51,10 @@ export async function POST() {
         chats.set(chatId, entry);
       }
       if (name) entry.counts.set(name, (entry.counts.get(name) ?? 0) + 1);
-      if (date > entry.lastDate) entry.lastDate = date;
+      // Normaliza para ISO antes de comparar — o campo date tem dois formatos no banco:
+      // "2026-05-05 09:06" e "2026-05-21T16:14:49.000-03:00"
+      const dateIso = date ? new Date(date).toISOString() : "";
+      if (dateIso && dateIso > entry.lastDate) entry.lastDate = dateIso;
     }
 
     if (data.length < pageSize) break;

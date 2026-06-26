@@ -7,7 +7,7 @@ import { useRouter, usePathname } from "next/navigation";
 import {
   LayoutDashboard, Building2, Users, Zap, FileText, ScrollText,
   ClipboardList, Wallet, Settings, ChevronLeft, ChevronRight,
-  ChevronDown, LogOut,
+  ChevronDown, LogOut, Bot,
 } from "lucide-react";
 import { clsx } from "clsx";
 import { supabaseBrowser } from "@/lib/supabase-browser";
@@ -91,8 +91,20 @@ export default function Sidebar() {
         </button>
       </div>
 
-      {/* Dashboard fora dos grupos */}
+      {/* Agente + Dashboard fora dos grupos */}
       <ul className="pda-nav" style={{ marginTop: 8 }}>
+        <li>
+          <button
+            type="button"
+            onClick={() => window.dispatchEvent(new Event("pandora:toggle-agent"))}
+            className="pda-nav-item"
+            style={{ width: "100%", background: "none", border: "none", cursor: "pointer", font: "inherit", textAlign: "left" }}
+            title={collapsed ? "Agente" : undefined}
+          >
+            <Bot size={16} />
+            <span className="pda-nav-label">Agente</span>
+          </button>
+        </li>
         <li>
           <Link
             href="/"

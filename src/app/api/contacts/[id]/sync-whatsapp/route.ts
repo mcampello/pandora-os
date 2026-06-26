@@ -16,7 +16,9 @@ export async function POST(_req: NextRequest, { params }: { params: Promise<{ id
   if (!contact.phone) return NextResponse.json({ error: "contact has no phone" }, { status: 400 });
 
   // Normalize phone → JID format
-  const digits = contact.phone.replace(/\D/g, "");
+  // Garante código do país 55 (Brasil): números sem ele teriam 10-11 dígitos
+  let digits = contact.phone.replace(/\D/g, "");
+  if (digits.length <= 11) digits = `55${digits}`;
   const jid = `${digits}@s.whatsapp.net`;
 
   // Fetch all documents for this chat (private conversation)
