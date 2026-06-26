@@ -3,7 +3,7 @@
 import { useState, useEffect, useCallback } from "react";
 import Link from "next/link";
 import { CheckCircle2, XCircle, Plus, Sparkles, AlertCircle } from "lucide-react";
-import type { Task, TaskRule, TaskPriority } from "@/lib/tasks";
+import type { Task, TaskRule, TaskPriority, TaskContextKind } from "@/lib/tasks";
 import TaskBell from "@/components/TaskBell";
 
 const PRIORITY_CONFIG: Record<TaskPriority, { label: string; color: string; bg: string }> = {
@@ -19,22 +19,46 @@ const SOURCE_BADGE: Record<string, { label: string; cls: string }> = {
   manual: { label: "Manual", cls: "pda-badge-warning" },
 };
 
-function entityLink(task: Task): { href: string; label: string } | null {
-  if (!task.entity_id || !task.entity_type) return null;
-  switch (task.entity_type) {
-    case "contact":     return { href: `/clientes/${task.entity_id}`, label: "Ver contato" };
-    case "client":      return { href: `/operacao?client=${task.entity_id}`, label: "Ver cliente" };
-    case "opportunity": return { href: `/oportunidades/${task.entity_id}`, label: "Ver oportunidade" };
-    case "proposal":    return { href: `/propostas`, label: "Ver proposta" };
-    case "deliverable": return { href: `/operacao`, label: "Ver entrega" };
-    default: return null;
-  }
+// Estilo do chip de contexto por conceito de negócio.
+const CONTEXT_STYLE: Record<TaskContextKind, { dot: string; color: string }> = {
+  prospect:    { dot: "#d97706", color: "#b45309" }, // âmbar — em prospecção
+  opportunity: { dot: "#7A1CB5", color: "#6b21a8" }, // violeta — oportunidade
+  contract:    { dot: "#2DD4A0", color: "#0f9d76" }, // verde — contrato ativo
+  client:      { dot: "#3b82f6", color: "#2563eb" }, // azul — cliente
+  proposal:    { dot: "#a855f7", color: "#7e22ce" },
+  deliverable: { dot: "#2DD4A0", color: "#0f9d76" },
+  contact:     { dot: "#9ca3af", color: "#6b7280" },
+};
+
+function ContextChip({ task }: { task: Task }) {
+  const ctx = task.context;
+  if (!ctx) return null;
+  const s = CONTEXT_STYLE[ctx.kind] ?? CONTEXT_STYLE.contact;
+  return (
+    <Link
+      href={ctx.href}
+      title={`${ctx.label}: ${ctx.name}`}
+      style={{
+        display: "inline-flex", alignItems: "center", gap: 6, textDecoration: "none",
+        fontSize: 11, color: s.color, border: `1px solid ${s.dot}33`,
+        background: `${s.dot}12`, borderRadius: 999, padding: "1px 9px 1px 7px",
+        maxWidth: 280, overflow: "hidden",
+      }}
+    >
+      <span style={{ width: 6, height: 6, borderRadius: 999, background: s.dot, flexShrink: 0 }} />
+      <span style={{ fontFamily: "var(--font-display)", textTransform: "uppercase", letterSpacing: "0.06em", fontSize: 9.5, opacity: 0.85, flexShrink: 0 }}>
+        {ctx.label}
+      </span>
+      <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+        {ctx.name}
+      </span>
+    </Link>
+  );
 }
 
 function TaskRow({ task, onUpdate }: { task: Task; onUpdate: () => void }) {
   const [loading, setLoading] = useState(false);
   const [exiting, setExiting] = useState(false);
-  const link = entityLink(task);
   const srcBadge = SOURCE_BADGE[task.source] ?? SOURCE_BADGE.manual;
   const isOverdue = task.due_at && new Date(task.due_at) < new Date();
 
@@ -79,11 +103,7 @@ function TaskRow({ task, onUpdate }: { task: Task; onUpdate: () => void }) {
           <span style={{ fontSize: 10, fontFamily: "var(--font-display)", color: cfg.color, textTransform: "uppercase", letterSpacing: "0.08em", opacity: 0.8 }}>
             {cfg.label}
           </span>
-          {link && (
-            <Link href={link.href} style={{ fontSize: 11, color: "var(--pandora-violet-500)", textDecoration: "none" }}>
-              {link.label} →
-            </Link>
-          )}
+          <ContextChip task={task} />
         </div>
         <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
           {task.due_at && (
@@ -158,6 +178,7 @@ export default function TarefasPage() {
   const [tasks, setTasks] = useState<Task[]>([]);
   const [flaggedRules, setFlaggedRules] = useState<TaskRule[]>([]);
   const [statusFilter, setStatusFilter] = useState<"open" | "done">("open");
+  const [contextFilter, setContextFilter] = useState<"all" | "prospect" | "opportunity" | "contract">("all");
   const [loading, setLoading] = useState(true);
   const [showNewForm, setShowNewForm] = useState(false);
   const [newTitle, setNewTitle] = useState("");
@@ -192,11 +213,23 @@ export default function TarefasPage() {
   }
 
   const PRIORITY_ORDER: TaskPriority[] = ["critical", "high", "medium", "low"];
-  const sorted = [...tasks].sort(
+  const filtered = contextFilter === "all"
+    ? tasks
+    : tasks.filter(t => t.context?.kind === contextFilter);
+  const sorted = [...filtered].sort(
     (a, b) => PRIORITY_ORDER.indexOf(a.priority) - PRIORITY_ORDER.indexOf(b.priority)
   );
 
-  const total = tasks.length;
+  const CONTEXT_FILTERS: { key: typeof contextFilter; label: string }[] = [
+    { key: "all",         label: "Todos" },
+    { key: "prospect",    label: "Prospect" },
+    { key: "opportunity", label: "Oportunidade" },
+    { key: "contract",    label: "Contrato ativo" },
+  ];
+  const countByKind = (k: typeof contextFilter) =>
+    k === "all" ? tasks.length : tasks.filter(t => t.context?.kind === k).length;
+
+  const total = filtered.length;
 
   return (
     <>
@@ -227,6 +260,27 @@ export default function TarefasPage() {
       </header>
 
       <div className="pda-content" style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+        {/* Filtro por contexto: prospect / oportunidade / contrato ativo */}
+        <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+          {CONTEXT_FILTERS.map(f => {
+            const active = contextFilter === f.key;
+            const n = countByKind(f.key);
+            return (
+              <button key={f.key} onClick={() => setContextFilter(f.key)} style={{
+                display: "inline-flex", alignItems: "center", gap: 6,
+                padding: "4px 12px", fontSize: 12, cursor: "pointer", borderRadius: 999,
+                fontFamily: "var(--font-display)",
+                border: `1px solid ${active ? "var(--pandora-violet-600)" : "var(--pandora-ink-200)"}`,
+                background: active ? "var(--pandora-violet-600)" : "transparent",
+                color: active ? "#fff" : "var(--pandora-ink-500)",
+              }}>
+                {f.label}
+                <span style={{ fontFamily: "var(--font-mono)", fontSize: 10, opacity: 0.8 }}>{n}</span>
+              </button>
+            );
+          })}
+        </div>
+
         {/* Promoção de regra */}
         {flaggedRules.length > 0 && (
           <PromotionBanner rules={flaggedRules} onDismiss={() => { setFlaggedRules([]); load(); }} />

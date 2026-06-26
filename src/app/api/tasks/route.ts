@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { supabaseServer } from "@/lib/supabase-server";
 import type { TaskPriority, TaskSource, TaskEntityType } from "@/lib/tasks";
+import { ACTIVE_TASK_STATUSES } from "@/lib/tasks";
+import { enrichTasksWithContext } from "@/lib/task-context";
 
 export async function GET(req: NextRequest) {
   const supabase = await supabaseServer();
@@ -19,7 +21,9 @@ export async function GET(req: NextRequest) {
     .order("created_at", { ascending: false })
     .limit(limit);
 
-  if (status)      query = query.eq("status", status);
+  // status=active agrupa os estados não resolvidos (open + in_progress)
+  if (status === "active") query = query.in("status", ACTIVE_TASK_STATUSES);
+  else if (status)         query = query.eq("status", status);
   if (priority)    query = query.eq("priority", priority);
   if (entity_type) query = query.eq("entity_type", entity_type);
   if (entity_id)   query = query.eq("entity_id", entity_id);
@@ -35,14 +39,15 @@ export async function GET(req: NextRequest) {
     return new Date(b.created_at).getTime() - new Date(a.created_at).getTime();
   });
 
-  return NextResponse.json(sorted);
+  const enriched = await enrichTasksWithContext(supabase, sorted);
+  return NextResponse.json(enriched);
 }
 
 export async function POST(req: NextRequest) {
   const supabase = await supabaseServer();
   const body = await req.json();
 
-  const { title, priority, source, rule_key, entity_type, entity_id, ai_reasoning, due_at, dedup_key } = body;
+  const { title, description, priority, source, rule_key, entity_type, entity_id, ai_reasoning, due_at, dedup_key } = body;
 
   if (!title || !priority) {
     return NextResponse.json({ error: "title e priority são obrigatórios" }, { status: 400 });
@@ -52,6 +57,7 @@ export async function POST(req: NextRequest) {
     .from("tasks")
     .insert({
       title,
+      description: description ?? null,
       priority: priority as TaskPriority,
       source: (source ?? "manual") as TaskSource,
       rule_key: rule_key ?? null,

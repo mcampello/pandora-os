@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { supabaseServer } from "@/lib/supabase-server";
+import { supabasePublic } from "@/lib/supabase-admin";
 import { fetchAllBookings } from "@/lib/calcom";
 import { upsertBooking } from "@/app/api/connectors/calcom/sync/route";
 
@@ -73,7 +74,7 @@ async function enrichWhatsapp(
   const digits = phone.replace(/\D/g, "");
   const jid = `${digits}@s.whatsapp.net`;
 
-  const { data: docs } = await supabase
+  const { data: docs } = await supabasePublic()
     .from("documents")
     .select("id, content, metadata")
     .eq("metadata->>chatId", jid)

@@ -4,29 +4,54 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import {
   ArrowLeft, Plus, Trash2, Heart, Clock, Video,
-  ChevronDown, ChevronRight, X, Check, MoreHorizontal,
-  AlertCircle, Loader2, Pencil,
+  ChevronDown, ChevronRight, X, Check, Loader2, Pencil,
+  MessageSquare, Zap, FileText, Upload, Send, RotateCcw,
+  ClipboardList, ExternalLink, CheckSquare, Square,
 } from "lucide-react";
-import type { Client, Initiative, InitiativeTask, InitiativeStatus, InitiativeTaskStatus } from "@/lib/types";
+import type {
+  Client, Initiative, InitiativeTask, InitiativeStatus, InitiativeTaskStatus,
+  Deliverable, ProposedAction,
+} from "@/lib/types";
 import { formatBRL } from "@/lib/docs";
 
-// ── constants ─────────────────────────────────────────────────────────────
+// ── constants ─────────────────────────────────────────────────────────────────
 
 const KANBAN_COLUMNS: { id: InitiativeStatus; label: string; color: string }[] = [
-  { id: "backlog",  label: "Backlog",       color: "var(--pandora-ink-300)" },
-  { id: "active",   label: "Em andamento",  color: "var(--pandora-violet-600)" },
-  { id: "paused",   label: "Pausado",       color: "#f59e0b" },
-  { id: "done",     label: "Concluído",     color: "var(--pandora-green-400)" },
+  { id: "backlog",  label: "Backlog",      color: "var(--pandora-ink-300)" },
+  { id: "active",   label: "Em andamento", color: "var(--pandora-violet-600)" },
+  { id: "paused",   label: "Pausado",      color: "#f59e0b" },
+  { id: "done",     label: "Concluído",    color: "var(--pandora-green-400)" },
 ];
 
 const TASK_STATUS_META: Record<InitiativeTaskStatus, { label: string; color: string; bg: string }> = {
-  todo:        { label: "A fazer",      color: "var(--pandora-ink-500)",  bg: "var(--pandora-ink-100)" },
-  in_progress: { label: "Em andamento", color: "var(--pandora-violet-600)", bg: "rgba(122,28,181,0.1)" },
-  blocked:     { label: "Bloqueado",    color: "#ef4444",                bg: "rgba(239,68,68,0.1)" },
-  done:        { label: "Concluído",    color: "var(--pandora-green-400)", bg: "rgba(45,212,160,0.1)" },
+  todo:        { label: "A fazer",       color: "var(--pandora-ink-500)",   bg: "var(--pandora-ink-100)" },
+  in_progress: { label: "Em andamento",  color: "var(--pandora-violet-600)", bg: "rgba(122,28,181,0.1)" },
+  blocked:     { label: "Bloqueado",     color: "#ef4444",                  bg: "rgba(239,68,68,0.1)" },
+  done:        { label: "Concluído",     color: "var(--pandora-green-400)", bg: "rgba(45,212,160,0.1)" },
 };
 
 const TASK_STATUSES: InitiativeTaskStatus[] = ["todo", "in_progress", "blocked", "done"];
+
+type Tab = "roadmap" | "reunioes" | "agente" | "entregas";
+
+interface Meeting {
+  id: string;
+  contact_id?: string;
+  subject?: string;
+  content?: string;
+  occurred_at: string;
+  external_url?: string;
+  channel?: string;
+  type?: string;
+}
+
+interface AgentMessage {
+  role: "user" | "assistant";
+  content: string;
+  proposed_actions?: ProposedAction[];
+}
+
+// ── helpers ───────────────────────────────────────────────────────────────────
 
 function healthColor(score?: number | null) {
   if (!score) return "var(--pandora-ink-300)";
@@ -43,23 +68,25 @@ function hoursColor(logged: number, target?: number | null) {
   return "var(--pandora-ink-300)";
 }
 
-// ── types ──────────────────────────────────────────────────────────────────
-
-interface Meeting {
-  id: string;
-  subject?: string;
-  content?: string;
-  occurred_at: string;
-  external_url?: string;
+function fmtDate(d: string) {
+  return new Date(d).toLocaleDateString("pt-BR", { day: "2-digit", month: "short", year: "numeric" });
 }
 
-// ── sub-components ─────────────────────────────────────────────────────────
+function channelLabel(ch?: string) {
+  const map: Record<string, string> = { fathom: "Fathom", whatsapp: "WhatsApp", manual: "Manual" };
+  return ch ? (map[ch] ?? ch) : "";
+}
+
+function channelColor(ch?: string) {
+  if (ch === "fathom") return "var(--pandora-violet-600)";
+  if (ch === "whatsapp") return "#25d366";
+  return "var(--pandora-ink-400)";
+}
+
+// ── TaskRow ───────────────────────────────────────────────────────────────────
 
 function TaskRow({
-  task,
-  onStatusChange,
-  onDelete,
-  onTitleEdit,
+  task, onStatusChange, onDelete, onTitleEdit,
 }: {
   task: InitiativeTask;
   onStatusChange: (id: string, status: InitiativeTaskStatus) => void;
@@ -88,44 +115,17 @@ function TaskRow({
   }
 
   return (
-    <div style={{
-      display: "flex", alignItems: "center", gap: 8,
-      padding: "6px 10px",
-      background: "var(--pandora-ink-50)",
-      borderRadius: 6,
-      border: "1px solid var(--pandora-ink-100)",
-    }}>
-      {/* status badge */}
-      <button
-        onClick={() => setShowMenu(v => !v)}
-        style={{
-          flexShrink: 0, fontSize: 10, fontWeight: 700, padding: "2px 7px",
-          borderRadius: 20, border: "none", cursor: "pointer",
-          background: meta.bg, color: meta.color,
-          fontFamily: "var(--font-chakra)", whiteSpace: "nowrap",
-          position: "relative",
-        }}
-        title="Mudar status"
-      >
+    <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "6px 10px", background: "var(--pandora-ink-50)", borderRadius: 6, border: "1px solid var(--pandora-ink-100)" }}>
+      <button onClick={() => setShowMenu(v => !v)} title="Mudar status"
+        style={{ flexShrink: 0, fontSize: 10, fontWeight: 700, padding: "2px 7px", borderRadius: 20, border: "none", cursor: "pointer", background: meta.bg, color: meta.color, fontFamily: "var(--font-chakra)", whiteSpace: "nowrap", position: "relative" }}>
         {meta.label}
         {showMenu && (
-          <div ref={menuRef} style={{
-            position: "absolute", top: "110%", left: 0, zIndex: 50,
-            background: "var(--pandora-ink-0)", border: "1px solid var(--pandora-ink-200)",
-            borderRadius: 8, overflow: "hidden", minWidth: 130,
-            boxShadow: "0 4px 16px rgba(0,0,0,0.15)",
-          }}>
+          <div ref={menuRef} style={{ position: "absolute", top: "110%", left: 0, zIndex: 50, background: "var(--pandora-ink-0)", border: "1px solid var(--pandora-ink-200)", borderRadius: 8, overflow: "hidden", minWidth: 130, boxShadow: "0 4px 16px rgba(0,0,0,0.15)" }}>
             {TASK_STATUSES.map(s => {
               const m = TASK_STATUS_META[s];
               return (
-                <button key={s}
-                  onClick={e => { e.stopPropagation(); onStatusChange(task.id, s); setShowMenu(false); }}
-                  style={{
-                    display: "block", width: "100%", textAlign: "left",
-                    padding: "7px 12px", background: "none", border: "none",
-                    cursor: "pointer", fontSize: 12, color: m.color,
-                    fontWeight: task.status === s ? 700 : 400,
-                  }}>
+                <button key={s} onClick={e => { e.stopPropagation(); onStatusChange(task.id, s); setShowMenu(false); }}
+                  style={{ display: "block", width: "100%", textAlign: "left", padding: "7px 12px", background: "none", border: "none", cursor: "pointer", fontSize: 12, color: m.color, fontWeight: task.status === s ? 700 : 400 }}>
                   {m.label}
                 </button>
               );
@@ -134,69 +134,36 @@ function TaskRow({
         )}
       </button>
 
-      {/* title */}
       {editing ? (
-        <input
-          autoFocus
-          value={draft}
-          onChange={e => setDraft(e.target.value)}
+        <input autoFocus value={draft} onChange={e => setDraft(e.target.value)}
           onBlur={commitEdit}
           onKeyDown={e => { if (e.key === "Enter") commitEdit(); if (e.key === "Escape") { setDraft(task.title); setEditing(false); } }}
-          style={{
-            flex: 1, padding: "2px 6px", borderRadius: 4,
-            border: "1px solid var(--pandora-violet-600)",
-            background: "var(--pandora-ink-0)", fontSize: 13,
-          }}
-        />
+          style={{ flex: 1, padding: "2px 6px", borderRadius: 4, border: "1px solid var(--pandora-violet-600)", background: "var(--pandora-ink-0)", fontSize: 13 }} />
       ) : (
-        <span
-          onDoubleClick={() => { setDraft(task.title); setEditing(true); }}
-          style={{
-            flex: 1, fontSize: 13,
-            textDecoration: task.status === "done" ? "line-through" : "none",
-            color: task.status === "done" ? "var(--pandora-ink-400)" : "var(--pandora-ink-800)",
-            cursor: "text",
-          }}
-        >
+        <span onDoubleClick={() => { setDraft(task.title); setEditing(true); }}
+          style={{ flex: 1, fontSize: 13, textDecoration: task.status === "done" ? "line-through" : "none", color: task.status === "done" ? "var(--pandora-ink-400)" : "var(--pandora-ink-800)", cursor: "text" }}>
           {task.title}
         </span>
       )}
 
-      {task.assignee && (
-        <span style={{ fontSize: 11, color: "var(--pandora-ink-400)", flexShrink: 0 }}>
-          {task.assignee}
-        </span>
-      )}
-
-      <button
-        onClick={() => { setDraft(task.title); setEditing(true); }}
-        style={{ flexShrink: 0, padding: 3, background: "none", border: "none", cursor: "pointer", color: "var(--pandora-ink-300)", opacity: 0.6 }}
-        title="Editar"
-      >
+      {task.assignee && <span style={{ fontSize: 11, color: "var(--pandora-ink-400)", flexShrink: 0 }}>{task.assignee}</span>}
+      <button onClick={() => { setDraft(task.title); setEditing(true); }} title="Editar"
+        style={{ flexShrink: 0, padding: 3, background: "none", border: "none", cursor: "pointer", color: "var(--pandora-ink-300)", opacity: 0.6 }}>
         <Pencil size={11} />
       </button>
-
-      <button
-        onClick={() => onDelete(task.id)}
-        style={{ flexShrink: 0, padding: 3, background: "none", border: "none", cursor: "pointer", color: "var(--pandora-ink-300)" }}
-        title="Remover"
-      >
+      <button onClick={() => onDelete(task.id)} title="Remover"
+        style={{ flexShrink: 0, padding: 3, background: "none", border: "none", cursor: "pointer", color: "var(--pandora-ink-300)" }}>
         <X size={12} />
       </button>
     </div>
   );
 }
 
+// ── InitiativeCard ────────────────────────────────────────────────────────────
+
 function InitiativeCard({
-  initiative,
-  onStatusChange,
-  onDelete,
-  onTitleEdit,
-  onDescEdit,
-  onAddTask,
-  onTaskStatusChange,
-  onTaskDelete,
-  onTaskTitleEdit,
+  initiative, onStatusChange, onDelete, onTitleEdit, onDescEdit,
+  onAddTask, onTaskStatusChange, onTaskDelete, onTaskTitleEdit,
 }: {
   initiative: Initiative;
   onStatusChange: (id: string, status: InitiativeStatus) => void;
@@ -244,72 +211,36 @@ function InitiativeCard({
   const colMeta = KANBAN_COLUMNS.find(c => c.id === initiative.status)!;
 
   return (
-    <div style={{
-      background: "var(--pandora-ink-0)",
-      border: "1.5px solid var(--pandora-ink-100)",
-      borderRadius: 12, overflow: "hidden",
-      marginBottom: 10,
-    }}>
-      {/* card header */}
+    <div style={{ background: "var(--pandora-ink-0)", border: "1.5px solid var(--pandora-ink-100)", borderRadius: 12, overflow: "hidden", marginBottom: 10 }}>
       <div style={{ padding: "12px 14px", display: "flex", flexDirection: "column", gap: 6 }}>
         <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-          <button
-            onClick={() => setExpanded(v => !v)}
-            style={{ padding: 0, background: "none", border: "none", cursor: "pointer", color: "var(--pandora-ink-400)", flexShrink: 0 }}
-          >
+          <button onClick={() => setExpanded(v => !v)} style={{ padding: 0, background: "none", border: "none", cursor: "pointer", color: "var(--pandora-ink-400)", flexShrink: 0 }}>
             {expanded ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
           </button>
 
           {editingTitle ? (
-            <input
-              autoFocus
-              value={titleDraft}
-              onChange={e => setTitleDraft(e.target.value)}
+            <input autoFocus value={titleDraft} onChange={e => setTitleDraft(e.target.value)}
               onBlur={commitTitle}
               onKeyDown={e => { if (e.key === "Enter") commitTitle(); if (e.key === "Escape") { setTitleDraft(initiative.title); setEditingTitle(false); } }}
-              style={{
-                flex: 1, padding: "2px 6px", borderRadius: 4,
-                border: "1px solid var(--pandora-violet-600)",
-                background: "var(--pandora-ink-50)", fontSize: 14, fontWeight: 600,
-              }}
-            />
+              style={{ flex: 1, padding: "2px 6px", borderRadius: 4, border: "1px solid var(--pandora-violet-600)", background: "var(--pandora-ink-50)", fontSize: 14, fontWeight: 600 }} />
           ) : (
-            <span
-              onDoubleClick={() => { setTitleDraft(initiative.title); setEditingTitle(true); }}
-              style={{ flex: 1, fontSize: 14, fontWeight: 600, fontFamily: "var(--font-chakra)", cursor: "text" }}
-            >
+            <span onDoubleClick={() => { setTitleDraft(initiative.title); setEditingTitle(true); }}
+              style={{ flex: 1, fontSize: 14, fontWeight: 600, fontFamily: "var(--font-chakra)", cursor: "text" }}>
               {initiative.title}
             </span>
           )}
 
-          {/* status chip */}
           <div style={{ position: "relative", flexShrink: 0 }} ref={statusMenuRef}>
-            <button
-              onClick={() => setShowStatusMenu(v => !v)}
-              style={{
-                fontSize: 10, fontWeight: 700, padding: "2px 8px", borderRadius: 20,
-                border: `1px solid ${colMeta.color}`, background: "transparent",
-                color: colMeta.color, cursor: "pointer", fontFamily: "var(--font-chakra)",
-              }}
-            >
+            <button onClick={() => setShowStatusMenu(v => !v)}
+              style={{ fontSize: 10, fontWeight: 700, padding: "2px 8px", borderRadius: 20, border: `1px solid ${colMeta.color}`, background: "transparent", color: colMeta.color, cursor: "pointer", fontFamily: "var(--font-chakra)" }}>
               {colMeta.label}
             </button>
             {showStatusMenu && (
-              <div style={{
-                position: "absolute", top: "110%", right: 0, zIndex: 50,
-                background: "var(--pandora-ink-0)", border: "1px solid var(--pandora-ink-200)",
-                borderRadius: 8, overflow: "hidden", minWidth: 140,
-                boxShadow: "0 4px 16px rgba(0,0,0,0.15)",
-              }}>
+              <div style={{ position: "absolute", top: "110%", right: 0, zIndex: 50, background: "var(--pandora-ink-0)", border: "1px solid var(--pandora-ink-200)", borderRadius: 8, overflow: "hidden", minWidth: 140, boxShadow: "0 4px 16px rgba(0,0,0,0.15)" }}>
                 {KANBAN_COLUMNS.map(col => (
                   <button key={col.id}
                     onClick={e => { e.stopPropagation(); onStatusChange(initiative.id, col.id); setShowStatusMenu(false); }}
-                    style={{
-                      display: "block", width: "100%", textAlign: "left",
-                      padding: "7px 12px", background: "none", border: "none",
-                      cursor: "pointer", fontSize: 12, color: col.color,
-                      fontWeight: initiative.status === col.id ? 700 : 400,
-                    }}>
+                    style={{ display: "block", width: "100%", textAlign: "left", padding: "7px 12px", background: "none", border: "none", cursor: "pointer", fontSize: 12, color: col.color, fontWeight: initiative.status === col.id ? 700 : 400 }}>
                     {col.label}
                   </button>
                 ))}
@@ -317,20 +248,14 @@ function InitiativeCard({
             )}
           </div>
 
-          <button
-            onClick={() => onDelete(initiative.id)}
-            style={{ padding: 4, background: "none", border: "none", cursor: "pointer", color: "var(--pandora-ink-300)", flexShrink: 0 }}
-            title="Remover iniciativa"
-          >
+          <button onClick={() => onDelete(initiative.id)} title="Remover iniciativa"
+            style={{ padding: 4, background: "none", border: "none", cursor: "pointer", color: "var(--pandora-ink-300)", flexShrink: 0 }}>
             <Trash2 size={13} />
           </button>
         </div>
 
         {initiative.description && (
-          <p
-            onDoubleClick={() => {/* could add desc edit */}}
-            style={{ margin: "0 0 0 22px", fontSize: 12, color: "var(--pandora-ink-500)", lineHeight: 1.4 }}
-          >
+          <p style={{ margin: "0 0 0 22px", fontSize: 12, color: "var(--pandora-ink-500)", lineHeight: 1.4 }}>
             {initiative.description}
           </p>
         )}
@@ -342,47 +267,28 @@ function InitiativeCard({
         )}
       </div>
 
-      {/* tasks */}
       {expanded && (
         <div style={{ padding: "0 14px 12px", display: "flex", flexDirection: "column", gap: 4 }}>
           {tasks.map(t => (
-            <TaskRow
-              key={t.id}
-              task={t}
+            <TaskRow key={t.id} task={t}
               onStatusChange={onTaskStatusChange}
               onDelete={(tid) => onTaskDelete(tid, initiative.id)}
-              onTitleEdit={onTaskTitleEdit}
-            />
+              onTitleEdit={onTaskTitleEdit} />
           ))}
 
           {addingTask ? (
             <div style={{ display: "flex", gap: 6, marginTop: 4 }}>
-              <input
-                autoFocus
-                placeholder="Nova tarefa..."
-                value={newTask}
+              <input autoFocus placeholder="Nova tarefa..." value={newTask}
                 onChange={e => setNewTask(e.target.value)}
                 onKeyDown={e => { if (e.key === "Enter") submitTask(); if (e.key === "Escape") { setAddingTask(false); setNewTask(""); } }}
-                style={{
-                  flex: 1, padding: "5px 8px", borderRadius: 6,
-                  border: "1px solid var(--pandora-ink-200)",
-                  background: "var(--pandora-ink-50)", fontSize: 13,
-                }}
-              />
-              <button className="pda-btn" style={{ padding: "5px 12px", fontSize: 12 }} onClick={submitTask}>
-                <Check size={13} />
-              </button>
-              <button className="pda-btn-ghost" style={{ padding: "5px 10px", fontSize: 12 }}
-                onClick={() => { setAddingTask(false); setNewTask(""); }}>
-                <X size={13} />
-              </button>
+                style={{ flex: 1, padding: "5px 8px", borderRadius: 6, border: "1px solid var(--pandora-ink-200)", background: "var(--pandora-ink-50)", fontSize: 13 }} />
+              <button className="pda-btn" style={{ padding: "5px 12px", fontSize: 12 }} onClick={submitTask}><Check size={13} /></button>
+              <button className="pda-btn-ghost" style={{ padding: "5px 10px", fontSize: 12 }} onClick={() => { setAddingTask(false); setNewTask(""); }}><X size={13} /></button>
             </div>
           ) : (
-            <button
-              className="pda-btn-ghost"
-              style={{ alignSelf: "flex-start", fontSize: 12, padding: "4px 8px", display: "flex", alignItems: "center", gap: 4, marginTop: 2 }}
-              onClick={() => setAddingTask(true)}
-            >
+            <button className="pda-btn-ghost"
+              style={{ alignSelf: "flex-start", fontSize: 12, padding: "4px 8px", marginTop: 2 }}
+              onClick={() => setAddingTask(true)}>
               <Plus size={12} /> Tarefa
             </button>
           )}
@@ -392,30 +298,65 @@ function InitiativeCard({
   );
 }
 
-// ── main page ──────────────────────────────────────────────────────────────
+// ── main page ─────────────────────────────────────────────────────────────────
 
 export default function OperacaoClientePage() {
   const { id } = useParams<{ id: string }>();
   const router = useRouter();
 
-  const [client, setClient] = useState<Client | null>(null);
+  const [client, setClient]         = useState<Client | null>(null);
   const [initiatives, setInitiatives] = useState<Initiative[]>([]);
-  const [meetings, setMeetings] = useState<Meeting[]>([]);
+  const [meetings, setMeetings]     = useState<Meeting[]>([]);
+  const [deliverables, setDeliverables] = useState<Deliverable[]>([]);
   const [totalHours, setTotalHours] = useState(0);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading]       = useState(true);
+
+  // tabs
+  const [activeTab, setActiveTab] = useState<Tab>("roadmap");
 
   // health edit
   const [editingHealth, setEditingHealth] = useState(false);
   const [healthForm, setHealthForm] = useState({ score: "", notes: "" });
 
-  // new initiative
-  const [addingInit, setAddingInit] = useState<InitiativeStatus | null>(null);
+  // kanban
+  const [addingInit, setAddingInit]   = useState<InitiativeStatus | null>(null);
   const [newInitTitle, setNewInitTitle] = useState("");
 
-  // expanded meeting transcript
+  // meetings
   const [expandedMeeting, setExpandedMeeting] = useState<string | null>(null);
+  const [importModal, setImportModal] = useState(false);
+  const [importForm, setImportForm]   = useState({ title: "", content: "", source: "teams", occurred_at: new Date().toISOString().substring(0, 10) });
+  const [importing, setImporting]     = useState(false);
+  const [sendToAgent, setSendToAgent] = useState<Meeting | null>(null);
 
-  // ── loaders ──────────────────────────────────────────────────────────────
+  // deliverables
+  const [deliverableMonth, setDeliverableMonth] = useState(() => {
+    const now = new Date();
+    return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
+  });
+  const [addingDeliv, setAddingDeliv] = useState(false);
+  const [newDelivTitle, setNewDelivTitle] = useState("");
+  const [savingDeliv, setSavingDeliv] = useState(false);
+  const [editingDelivId, setEditingDelivId] = useState<string | null>(null);
+  const [editingDelivTitle, setEditingDelivTitle] = useState("");
+
+  // agent
+  const [agentMessages, setAgentMessages] = useState<AgentMessage[]>([]);
+  const [agentInput, setAgentInput] = useState("");
+  const [agentThinking, setAgentThinking] = useState(false);
+  const [pendingActions, setPendingActions] = useState<ProposedAction[]>([]);
+  const [selectedActions, setSelectedActions] = useState<Set<string>>(new Set());
+  const [applyingActions, setApplyingActions] = useState(false);
+  const [applyResult, setApplyResult] = useState<string | null>(null);
+  const agentBottomRef = useRef<HTMLDivElement>(null);
+
+  // ── loaders ───────────────────────────────────────────────────────────────
+
+  const loadDeliverables = useCallback(async (clientId: string, month: string) => {
+    const monthDate = `${month}-01`;
+    const res = await fetch(`/api/deliverables?client_id=${clientId}&month=${monthDate}`);
+    if (res.ok) setDeliverables(await res.json());
+  }, []);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -442,10 +383,29 @@ export default function OperacaoClientePage() {
     setInitiatives(initiativesData);
     setMeetings(meetingsData);
     setTotalHours((hoursData as { hours: number }[]).reduce((s, e) => s + Number(e.hours), 0));
+    await loadDeliverables(clientData.id, deliverableMonth);
     setLoading(false);
-  }, [id, router]);
+  }, [id, router, deliverableMonth, loadDeliverables]);
 
   useEffect(() => { load(); }, [load]);
+
+  useEffect(() => {
+    if (client) loadDeliverables(client.id, deliverableMonth);
+  }, [deliverableMonth, client, loadDeliverables]);
+
+  // scroll agent to bottom
+  useEffect(() => {
+    agentBottomRef.current?.scrollIntoView({ behavior: "smooth" });
+  }, [agentMessages, agentThinking]);
+
+  // if sendToAgent is set, switch to agent tab and inject the meeting
+  useEffect(() => {
+    if (!sendToAgent) return;
+    setActiveTab("agente");
+    const content = `Analise esta reunião/conversa e proponha atualizações para o roadmap:\n\n**${sendToAgent.subject ?? "Reunião"}** (${fmtDate(sendToAgent.occurred_at)})\n\n${sendToAgent.content ?? "(sem transcrição)"}`;
+    setAgentInput(content);
+    setSendToAgent(null);
+  }, [sendToAgent]);
 
   // ── initiative actions ────────────────────────────────────────────────────
 
@@ -453,22 +413,19 @@ export default function OperacaoClientePage() {
     const title = newInitTitle.trim();
     if (!title || !client) return;
     const res = await fetch("/api/initiatives", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
+      method: "POST", headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ client_id: client.id, title, status }),
     });
     if (res.ok) {
       const created = await res.json();
       setInitiatives(prev => [...prev, created]);
     }
-    setNewInitTitle("");
-    setAddingInit(null);
+    setNewInitTitle(""); setAddingInit(null);
   }
 
   async function updateInitiativeStatus(initiativeId: string, status: InitiativeStatus) {
     await fetch(`/api/initiatives/${initiativeId}`, {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
+      method: "PATCH", headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ status }),
     });
     setInitiatives(prev => prev.map(i => i.id === initiativeId ? { ...i, status } : i));
@@ -481,8 +438,7 @@ export default function OperacaoClientePage() {
 
   async function editInitiativeTitle(initiativeId: string, title: string) {
     await fetch(`/api/initiatives/${initiativeId}`, {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
+      method: "PATCH", headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ title }),
     });
     setInitiatives(prev => prev.map(i => i.id === initiativeId ? { ...i, title } : i));
@@ -490,8 +446,7 @@ export default function OperacaoClientePage() {
 
   async function editInitiativeDesc(initiativeId: string, description: string) {
     await fetch(`/api/initiatives/${initiativeId}`, {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
+      method: "PATCH", headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ description }),
     });
     setInitiatives(prev => prev.map(i => i.id === initiativeId ? { ...i, description } : i));
@@ -501,8 +456,7 @@ export default function OperacaoClientePage() {
 
   async function addTask(initiativeId: string, title: string) {
     const res = await fetch("/api/initiative-tasks", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
+      method: "POST", headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ initiative_id: initiativeId, title }),
     });
     if (res.ok) {
@@ -515,13 +469,11 @@ export default function OperacaoClientePage() {
 
   async function updateTaskStatus(taskId: string, status: InitiativeTaskStatus) {
     await fetch(`/api/initiative-tasks/${taskId}`, {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
+      method: "PATCH", headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ status }),
     });
     setInitiatives(prev => prev.map(i => ({
-      ...i,
-      tasks: (i.tasks ?? []).map(t => t.id === taskId ? { ...t, status } : t),
+      ...i, tasks: (i.tasks ?? []).map(t => t.id === taskId ? { ...t, status } : t),
     })));
   }
 
@@ -534,32 +486,171 @@ export default function OperacaoClientePage() {
 
   async function editTaskTitle(taskId: string, title: string) {
     await fetch(`/api/initiative-tasks/${taskId}`, {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
+      method: "PATCH", headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ title }),
     });
     setInitiatives(prev => prev.map(i => ({
-      ...i,
-      tasks: (i.tasks ?? []).map(t => t.id === taskId ? { ...t, title } : t),
+      ...i, tasks: (i.tasks ?? []).map(t => t.id === taskId ? { ...t, title } : t),
     })));
   }
 
-  // ── health actions ────────────────────────────────────────────────────────
+  // ── health ────────────────────────────────────────────────────────────────
 
   async function saveHealth() {
     if (!client) return;
     const score = parseInt(healthForm.score);
     if (isNaN(score) || score < 1 || score > 10) return;
     const res = await fetch(`/api/clients/${client.id}`, {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
+      method: "PATCH", headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ health_score: score, health_notes: healthForm.notes }),
     });
+    if (res.ok) { setClient(await res.json()); setEditingHealth(false); }
+  }
+
+  // ── import transcript ─────────────────────────────────────────────────────
+
+  async function importTranscript() {
+    if (!client || !importForm.content.trim()) return;
+    setImporting(true);
+    const res = await fetch("/api/operacao/import-transcript", {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        client_id: client.id,
+        content: importForm.content,
+        title: importForm.title || `Reunião ${importForm.source}`,
+        occurred_at: new Date(importForm.occurred_at).toISOString(),
+        source: importForm.source,
+      }),
+    });
     if (res.ok) {
-      const updated = await res.json();
-      setClient(updated);
-      setEditingHealth(false);
+      const newMeeting = await res.json();
+      setMeetings(prev => [newMeeting, ...prev]);
+      setImportModal(false);
+      setImportForm({ title: "", content: "", source: "teams", occurred_at: new Date().toISOString().substring(0, 10) });
     }
+    setImporting(false);
+  }
+
+  // ── deliverables ──────────────────────────────────────────────────────────
+
+  async function addDeliverable() {
+    if (!client || !newDelivTitle.trim()) return;
+    setSavingDeliv(true);
+    const res = await fetch("/api/deliverables", {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ client_id: client.id, month: `${deliverableMonth}-01`, title: newDelivTitle.trim() }),
+    });
+    if (res.ok) {
+      const d = await res.json();
+      setDeliverables(prev => [...prev, d]);
+      setNewDelivTitle(""); setAddingDeliv(false);
+    }
+    setSavingDeliv(false);
+  }
+
+  async function toggleDeliverable(delivId: string, done: boolean) {
+    const res = await fetch(`/api/deliverables/${delivId}`, {
+      method: "PATCH", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ done }),
+    });
+    if (res.ok) setDeliverables(prev => prev.map(d => d.id === delivId ? { ...d, done } : d));
+  }
+
+  async function editDeliverableTitle(delivId: string) {
+    const title = editingDelivTitle.trim();
+    if (!title) return;
+    const res = await fetch(`/api/deliverables/${delivId}`, {
+      method: "PATCH", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ title }),
+    });
+    if (res.ok) {
+      setDeliverables(prev => prev.map(d => d.id === delivId ? { ...d, title } : d));
+      setEditingDelivId(null);
+    }
+  }
+
+  async function deleteDeliverable(delivId: string) {
+    await fetch(`/api/deliverables/${delivId}`, { method: "DELETE" });
+    setDeliverables(prev => prev.filter(d => d.id !== delivId));
+  }
+
+  // ── agent ─────────────────────────────────────────────────────────────────
+
+  async function sendAgentMessage(text?: string) {
+    const content = (text ?? agentInput).trim();
+    if (!content || agentThinking) return;
+    setAgentInput("");
+
+    const newMsg: AgentMessage = { role: "user", content };
+    const updatedMessages = [...agentMessages, newMsg];
+    setAgentMessages(updatedMessages);
+    setAgentThinking(true);
+    setApplyResult(null);
+
+    const res = await fetch("/api/operacao/agent", {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        client_id: id,
+        messages: updatedMessages.map(m => ({ role: m.role, content: m.content })),
+        context: {
+          initiatives,
+          recent_meetings: meetings.slice(0, 5).map(m => ({
+            id: m.id, subject: m.subject, content: m.content,
+            occurred_at: m.occurred_at, channel: m.channel,
+          })),
+          deliverables,
+        },
+      }),
+    });
+
+    setAgentThinking(false);
+
+    if (res.ok) {
+      const data = await res.json() as { reply: string; proposed_actions: ProposedAction[] };
+      const assistantMsg: AgentMessage = {
+        role: "assistant",
+        content: data.reply,
+        proposed_actions: data.proposed_actions?.length ? data.proposed_actions : undefined,
+      };
+      setAgentMessages(prev => [...prev, assistantMsg]);
+      if (data.proposed_actions?.length) {
+        setPendingActions(data.proposed_actions);
+        setSelectedActions(new Set(data.proposed_actions.map(a => a.id)));
+      }
+    } else {
+      setAgentMessages(prev => [...prev, { role: "assistant", content: "Erro ao contatar o agente. Tente novamente." }]);
+    }
+  }
+
+  async function analyzeRecentMeetings() {
+    const recent = meetings.slice(0, 3);
+    if (!recent.length) {
+      setAgentMessages(prev => [...prev, { role: "assistant", content: "Nenhuma reunião recente encontrada para analisar." }]);
+      return;
+    }
+    const content = `Analise as últimas ${recent.length} reunião(ões) do cliente e proponha atualizações para o roadmap:\n\n` +
+      recent.map(m => `**${m.subject ?? "Reunião"}** (${fmtDate(m.occurred_at)}, ${channelLabel(m.channel)})\n${m.content ?? "(sem transcrição)"}`).join("\n\n---\n\n");
+    await sendAgentMessage(content);
+  }
+
+  async function applySelectedActions() {
+    const toApply = pendingActions.filter(a => selectedActions.has(a.id));
+    if (!toApply.length) return;
+    setApplyingActions(true);
+    const res = await fetch("/api/operacao/apply-actions", {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ client_id: id, actions: toApply }),
+    });
+    if (res.ok) {
+      const { results } = await res.json() as { results: { id: string; success: boolean; error?: string }[] };
+      const ok = results.filter(r => r.success).length;
+      const fail = results.filter(r => !r.success).length;
+      setApplyResult(fail ? `${ok} aplicadas, ${fail} com erro.` : `${ok} ação(ões) aplicada(s) com sucesso.`);
+      setPendingActions([]);
+      setSelectedActions(new Set());
+      await load();
+    }
+    setApplyingActions(false);
   }
 
   // ── derived ───────────────────────────────────────────────────────────────
@@ -569,6 +660,13 @@ export default function OperacaoClientePage() {
     for (const i of initiatives) map[i.status].push(i);
     return map;
   }, [initiatives]);
+
+  const TABS: { key: Tab; label: string; icon: React.ElementType }[] = [
+    { key: "roadmap",  label: "Roadmap",  icon: ClipboardList },
+    { key: "reunioes", label: "Reuniões", icon: Video },
+    { key: "agente",   label: "Agente",   icon: Zap },
+    { key: "entregas", label: "Entregas", icon: FileText },
+  ];
 
   // ── render ────────────────────────────────────────────────────────────────
 
@@ -588,7 +686,7 @@ export default function OperacaoClientePage() {
       {/* ── topbar ── */}
       <div className="pda-topbar" style={{ flexShrink: 0 }}>
         <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-          <button className="pda-btn-ghost" style={{ padding: "4px 8px", display: "flex", alignItems: "center", gap: 4, fontSize: 13 }}
+          <button className="pda-btn-ghost" style={{ padding: "4px 8px", fontSize: 13 }}
             onClick={() => router.push("/operacao")}>
             <ArrowLeft size={14} /> Operação
           </button>
@@ -599,17 +697,12 @@ export default function OperacaoClientePage() {
         </div>
 
         <div style={{ display: "flex", alignItems: "center", gap: 16 }}>
-          {/* fee */}
           {client.monthly_fee && (
             <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end" }}>
               <span style={{ fontSize: 10, color: "var(--pandora-ink-400)", fontFamily: "var(--font-chakra)", textTransform: "uppercase", letterSpacing: 1 }}>Fee</span>
-              <span style={{ fontSize: 14, fontWeight: 700, color: "var(--pandora-violet-600)", fontFamily: "var(--font-chakra)" }}>
-                {formatBRL(client.monthly_fee)}
-              </span>
+              <span style={{ fontSize: 14, fontWeight: 700, color: "var(--pandora-violet-600)", fontFamily: "var(--font-chakra)" }}>{formatBRL(client.monthly_fee)}</span>
             </div>
           )}
-
-          {/* hours */}
           {(client.dedication_hours || totalHours > 0) && (
             <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end" }}>
               <span style={{ fontSize: 10, color: "var(--pandora-ink-400)", fontFamily: "var(--font-chakra)", textTransform: "uppercase", letterSpacing: 1 }}>Horas</span>
@@ -621,39 +714,20 @@ export default function OperacaoClientePage() {
 
           {/* health score */}
           <div style={{ position: "relative" }}>
-            <button
-              onClick={() => {
-                setHealthForm({ score: String(client.health_score ?? ""), notes: client.health_notes ?? "" });
-                setEditingHealth(v => !v);
-              }}
+            <button onClick={() => { setHealthForm({ score: String(client.health_score ?? ""), notes: client.health_notes ?? "" }); setEditingHealth(v => !v); }}
               title="Editar health score"
-              style={{
-                width: 38, height: 38, borderRadius: "50%",
-                background: healthColor(client.health_score),
-                border: "none", cursor: "pointer",
-                fontSize: 15, fontWeight: 800, color: "#fff",
-                fontFamily: "var(--font-chakra)", display: "flex", alignItems: "center", justifyContent: "center",
-              }}
-            >
+              style={{ width: 38, height: 38, borderRadius: "50%", background: healthColor(client.health_score), border: "none", cursor: "pointer", fontSize: 15, fontWeight: 800, color: "#fff", fontFamily: "var(--font-chakra)", display: "flex", alignItems: "center", justifyContent: "center" }}>
               {client.health_score ?? "?"}
             </button>
-
             {editingHealth && (
-              <div style={{
-                position: "absolute", top: "110%", right: 0, zIndex: 100,
-                background: "var(--pandora-ink-0)", border: "1px solid var(--pandora-ink-200)",
-                borderRadius: 10, padding: 12, display: "flex", flexDirection: "column", gap: 8,
-                minWidth: 260, boxShadow: "0 8px 24px rgba(0,0,0,0.15)",
-              }}>
+              <div style={{ position: "absolute", top: "110%", right: 0, zIndex: 100, background: "var(--pandora-ink-0)", border: "1px solid var(--pandora-ink-200)", borderRadius: 10, padding: 12, display: "flex", flexDirection: "column", gap: 8, minWidth: 260, boxShadow: "0 8px 24px rgba(0,0,0,0.15)" }}>
                 <div style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 12, fontWeight: 600, color: "var(--pandora-ink-500)" }}>
                   <Heart size={12} /> Health Score
                 </div>
-                <input type="number" min={1} max={10} placeholder="Score 1–10"
-                  value={healthForm.score}
+                <input type="number" min={1} max={10} placeholder="Score 1–10" value={healthForm.score}
                   onChange={e => setHealthForm(f => ({ ...f, score: e.target.value }))}
                   style={{ padding: "5px 8px", borderRadius: 6, border: "1px solid var(--pandora-ink-200)", background: "var(--pandora-ink-50)", fontSize: 13 }} />
-                <input placeholder="Observações..."
-                  value={healthForm.notes}
+                <input placeholder="Observações..." value={healthForm.notes}
                   onChange={e => setHealthForm(f => ({ ...f, notes: e.target.value }))}
                   onKeyDown={e => { if (e.key === "Enter") saveHealth(); }}
                   style={{ padding: "5px 8px", borderRadius: 6, border: "1px solid var(--pandora-ink-200)", background: "var(--pandora-ink-50)", fontSize: 13 }} />
@@ -667,152 +741,55 @@ export default function OperacaoClientePage() {
         </div>
       </div>
 
-      {/* ── main layout: meetings panel + kanban ── */}
-      <div style={{ flex: 1, display: "flex", overflow: "hidden" }}>
+      {/* ── tabs ── */}
+      <div style={{ borderBottom: "1px solid var(--pandora-ink-100)", padding: "0 24px", display: "flex", gap: 2, flexShrink: 0 }}>
+        {TABS.map(tab => (
+          <button key={tab.key} type="button" onClick={() => setActiveTab(tab.key)}
+            style={{
+              background: "none", border: "none", cursor: "pointer", padding: "10px 16px",
+              fontSize: 13, fontWeight: 500, display: "flex", alignItems: "center", gap: 6,
+              color: activeTab === tab.key ? "var(--pandora-violet-400)" : "var(--pandora-ink-400)",
+              borderBottom: `2px solid ${activeTab === tab.key ? "var(--pandora-violet-600)" : "transparent"}`,
+              marginBottom: -1,
+            }}>
+            <tab.icon size={14} />
+            {tab.label}
+          </button>
+        ))}
+      </div>
 
-        {/* meetings sidebar */}
-        <div style={{
-          width: 300, flexShrink: 0,
-          borderRight: "1px solid var(--pandora-ink-100)",
-          display: "flex", flexDirection: "column",
-          overflow: "hidden",
-        }}>
-          <div style={{ padding: "14px 16px 10px", borderBottom: "1px solid var(--pandora-ink-100)", flexShrink: 0 }}>
-            <p className="pda-eyebrow" style={{ margin: 0 }}>Reuniões</p>
-          </div>
-
-          <div style={{ flex: 1, overflowY: "auto", padding: "10px 12px", display: "flex", flexDirection: "column", gap: 8 }}>
-            {meetings.length === 0 ? (
-              <p style={{ fontSize: 12, color: "var(--pandora-ink-400)", textAlign: "center", marginTop: 20 }}>
-                Nenhuma reunião encontrada.
-              </p>
-            ) : (
-              meetings.map(m => (
-                <div key={m.id} style={{
-                  background: "var(--pandora-ink-0)", borderRadius: 10,
-                  border: "1px solid var(--pandora-ink-100)",
-                  overflow: "hidden",
-                }}>
-                  <div
-                    onClick={() => setExpandedMeeting(v => v === m.id ? null : m.id)}
-                    style={{ padding: "10px 12px", cursor: "pointer", display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 8 }}
-                  >
-                    <div style={{ flex: 1, minWidth: 0 }}>
-                      <div style={{ fontSize: 12, fontWeight: 600, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                        {m.subject ?? "Reunião"}
-                      </div>
-                      <div style={{ fontSize: 10, color: "var(--pandora-ink-400)", marginTop: 2 }}>
-                        {new Date(m.occurred_at).toLocaleDateString("pt-BR", { day: "2-digit", month: "short", year: "numeric" })}
-                      </div>
-                    </div>
-                    <div style={{ display: "flex", gap: 6, alignItems: "center", flexShrink: 0 }}>
-                      {m.external_url && (
-                        <a href={m.external_url} target="_blank" rel="noreferrer"
-                          onClick={e => e.stopPropagation()}
-                          style={{ color: "var(--pandora-violet-600)", display: "flex" }}
-                          title="Abrir no Fathom">
-                          <Video size={12} />
-                        </a>
-                      )}
-                      {expandedMeeting === m.id ? <ChevronDown size={12} style={{ color: "var(--pandora-ink-400)" }} /> : <ChevronRight size={12} style={{ color: "var(--pandora-ink-400)" }} />}
-                    </div>
-                  </div>
-
-                  {expandedMeeting === m.id && m.content && (
-                    <div style={{ padding: "0 12px 10px", borderTop: "1px solid var(--pandora-ink-100)" }}>
-                      <p style={{ fontSize: 11, color: "var(--pandora-ink-500)", margin: "8px 0 0", lineHeight: 1.5, whiteSpace: "pre-wrap" }}>
-                        {m.content}
-                      </p>
-                    </div>
-                  )}
-
-                  {expandedMeeting === m.id && !m.content && (
-                    <div style={{ padding: "8px 12px 10px", borderTop: "1px solid var(--pandora-ink-100)" }}>
-                      <p style={{ fontSize: 11, color: "var(--pandora-ink-400)", margin: 0 }}>
-                        Transcrição não disponível.
-                      </p>
-                    </div>
-                  )}
-                </div>
-              ))
-            )}
-          </div>
-        </div>
-
-        {/* ── kanban ── */}
+      {/* ── tab: roadmap ── */}
+      {activeTab === "roadmap" && (
         <div style={{ flex: 1, overflowX: "auto", overflowY: "hidden", display: "flex", padding: "16px 20px", gap: 16 }}>
           {KANBAN_COLUMNS.map(col => {
             const colInitiatives = initiativesByStatus[col.id];
             const isAdding = addingInit === col.id;
-
             return (
               <div key={col.id} style={{ width: 300, flexShrink: 0, display: "flex", flexDirection: "column", height: "100%" }}>
-                {/* column header */}
-                <div style={{
-                  display: "flex", justifyContent: "space-between", alignItems: "center",
-                  marginBottom: 12, paddingBottom: 10,
-                  borderBottom: `2px solid ${col.color}`,
-                }}>
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12, paddingBottom: 10, borderBottom: `2px solid ${col.color}` }}>
                   <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                    <span style={{
-                      fontSize: 11, fontWeight: 800, fontFamily: "var(--font-chakra)",
-                      textTransform: "uppercase", letterSpacing: 1, color: col.color,
-                    }}>
-                      {col.label}
-                    </span>
-                    <span style={{
-                      fontSize: 11, fontWeight: 700, color: "#fff",
-                      background: col.color, borderRadius: 20, padding: "1px 7px",
-                      fontFamily: "var(--font-chakra)",
-                    }}>
-                      {colInitiatives.length}
-                    </span>
+                    <span style={{ fontSize: 11, fontWeight: 800, fontFamily: "var(--font-chakra)", textTransform: "uppercase", letterSpacing: 1, color: col.color }}>{col.label}</span>
+                    <span style={{ fontSize: 11, fontWeight: 700, color: "#fff", background: col.color, borderRadius: 20, padding: "1px 7px", fontFamily: "var(--font-chakra)" }}>{colInitiatives.length}</span>
                   </div>
-                  <button
-                    className="pda-btn-ghost"
-                    style={{ padding: 4, display: "flex", alignItems: "center", gap: 3, fontSize: 12 }}
-                    onClick={() => {
-                      setAddingInit(isAdding ? null : col.id);
-                      setNewInitTitle("");
-                    }}
-                    title="Nova iniciativa"
-                  >
+                  <button className="pda-btn-ghost" style={{ padding: 4, fontSize: 12 }}
+                    onClick={() => { setAddingInit(isAdding ? null : col.id); setNewInitTitle(""); }} title="Nova iniciativa">
                     <Plus size={13} />
                   </button>
                 </div>
 
-                {/* new initiative input */}
                 {isAdding && (
                   <div style={{ marginBottom: 10, display: "flex", flexDirection: "column", gap: 6 }}>
-                    <input
-                      autoFocus
-                      placeholder="Nome da iniciativa..."
-                      value={newInitTitle}
+                    <input autoFocus placeholder="Nome da iniciativa..." value={newInitTitle}
                       onChange={e => setNewInitTitle(e.target.value)}
-                      onKeyDown={e => {
-                        if (e.key === "Enter") addInitiative(col.id);
-                        if (e.key === "Escape") { setAddingInit(null); setNewInitTitle(""); }
-                      }}
-                      style={{
-                        padding: "7px 10px", borderRadius: 8, fontSize: 13,
-                        border: `1.5px solid ${col.color}`,
-                        background: "var(--pandora-ink-0)",
-                      }}
-                    />
+                      onKeyDown={e => { if (e.key === "Enter") addInitiative(col.id); if (e.key === "Escape") { setAddingInit(null); setNewInitTitle(""); } }}
+                      style={{ padding: "7px 10px", borderRadius: 8, fontSize: 13, border: `1.5px solid ${col.color}`, background: "var(--pandora-ink-0)" }} />
                     <div style={{ display: "flex", gap: 6 }}>
-                      <button className="pda-btn" style={{ flex: 1, fontSize: 12, padding: "5px 10px" }}
-                        onClick={() => addInitiative(col.id)}>
-                        Adicionar
-                      </button>
-                      <button className="pda-btn-ghost" style={{ fontSize: 12, padding: "5px 10px" }}
-                        onClick={() => { setAddingInit(null); setNewInitTitle(""); }}>
-                        <X size={13} />
-                      </button>
+                      <button className="pda-btn" style={{ flex: 1, fontSize: 12, padding: "5px 10px" }} onClick={() => addInitiative(col.id)}>Adicionar</button>
+                      <button className="pda-btn-ghost" style={{ fontSize: 12, padding: "5px 10px" }} onClick={() => { setAddingInit(null); setNewInitTitle(""); }}><X size={13} /></button>
                     </div>
                   </div>
                 )}
 
-                {/* initiatives list */}
                 <div style={{ flex: 1, overflowY: "auto" }}>
                   {colInitiatives.length === 0 && !isAdding && (
                     <div style={{ textAlign: "center", padding: "24px 0" }}>
@@ -820,9 +797,7 @@ export default function OperacaoClientePage() {
                     </div>
                   )}
                   {colInitiatives.map(initiative => (
-                    <InitiativeCard
-                      key={initiative.id}
-                      initiative={initiative}
+                    <InitiativeCard key={initiative.id} initiative={initiative}
                       onStatusChange={updateInitiativeStatus}
                       onDelete={deleteInitiative}
                       onTitleEdit={editInitiativeTitle}
@@ -830,15 +805,361 @@ export default function OperacaoClientePage() {
                       onAddTask={addTask}
                       onTaskStatusChange={updateTaskStatus}
                       onTaskDelete={deleteTask}
-                      onTaskTitleEdit={editTaskTitle}
-                    />
+                      onTaskTitleEdit={editTaskTitle} />
                   ))}
                 </div>
               </div>
             );
           })}
         </div>
-      </div>
+      )}
+
+      {/* ── tab: reuniões ── */}
+      {activeTab === "reunioes" && (
+        <div style={{ flex: 1, overflowY: "auto", padding: "24px", maxWidth: 800 }}>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 20 }}>
+            <div>
+              <h2 style={{ margin: 0, fontFamily: "var(--font-chakra)", fontSize: 18 }}>Reuniões & Interações</h2>
+              <p style={{ margin: "4px 0 0", fontSize: 13, color: "var(--pandora-ink-400)" }}>
+                Fathom, WhatsApp e transcrições manuais de todos os contatos da empresa
+              </p>
+            </div>
+            <button className="pda-btn-ghost" style={{ fontSize: 12 }} onClick={() => setImportModal(true)}>
+              <Upload size={13} /> Colar transcrição
+            </button>
+          </div>
+
+          {meetings.length === 0 ? (
+            <div className="pda-empty" style={{ padding: "48px 0" }}>
+              <Video size={32} />
+              <p>Nenhuma reunião ou interação encontrada.</p>
+              <button className="pda-btn" style={{ fontSize: 12, marginTop: 8 }} onClick={() => setImportModal(true)}>
+                <Upload size={13} /> Colar primeira transcrição
+              </button>
+            </div>
+          ) : (
+            <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+              {meetings.map(m => (
+                <div key={m.id} className="pda-card" style={{ padding: 0, overflow: "hidden" }}>
+                  <div onClick={() => setExpandedMeeting(v => v === m.id ? null : m.id)}
+                    style={{ padding: "14px 16px", cursor: "pointer", display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 12 }}>
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 4 }}>
+                        <span style={{ fontSize: 13, fontWeight: 600, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                          {m.subject ?? "Reunião"}
+                        </span>
+                        <span style={{ fontSize: 10, fontWeight: 700, color: channelColor(m.channel), background: `${channelColor(m.channel)}18`, padding: "2px 7px", borderRadius: 20, flexShrink: 0 }}>
+                          {channelLabel(m.channel)}
+                        </span>
+                      </div>
+                      <div style={{ fontSize: 11, color: "var(--pandora-ink-400)" }}>
+                        {fmtDate(m.occurred_at)}
+                      </div>
+                    </div>
+                    <div style={{ display: "flex", gap: 8, alignItems: "center", flexShrink: 0 }}>
+                      {m.content && (
+                        <button className="pda-btn-ghost" style={{ fontSize: 11, padding: "3px 8px" }}
+                          onClick={e => { e.stopPropagation(); setSendToAgent(m); }}
+                          title="Enviar para o Agente">
+                          <Zap size={11} /> Agente
+                        </button>
+                      )}
+                      {m.external_url && (
+                        <a href={m.external_url} target="_blank" rel="noreferrer"
+                          onClick={e => e.stopPropagation()}
+                          style={{ color: "var(--pandora-violet-600)", display: "flex" }} title="Abrir no Fathom">
+                          <ExternalLink size={13} />
+                        </a>
+                      )}
+                      {expandedMeeting === m.id ? <ChevronDown size={14} style={{ color: "var(--pandora-ink-400)" }} /> : <ChevronRight size={14} style={{ color: "var(--pandora-ink-400)" }} />}
+                    </div>
+                  </div>
+
+                  {expandedMeeting === m.id && (
+                    <div style={{ borderTop: "1px solid var(--pandora-ink-100)", padding: "12px 16px", background: "var(--pandora-ink-50)" }}>
+                      {m.content ? (
+                        <pre style={{ fontSize: 12, color: "var(--pandora-ink-600)", margin: 0, lineHeight: 1.6, whiteSpace: "pre-wrap", fontFamily: "var(--font-mono)" }}>
+                          {m.content}
+                        </pre>
+                      ) : (
+                        <p style={{ fontSize: 12, color: "var(--pandora-ink-400)", margin: 0 }}>Transcrição não disponível.</p>
+                      )}
+                    </div>
+                  )}
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* ── tab: agente ── */}
+      {activeTab === "agente" && (
+        <div style={{ flex: 1, display: "flex", flexDirection: "column", overflow: "hidden" }}>
+          {/* messages area */}
+          <div style={{ flex: 1, overflowY: "auto", padding: "24px", display: "flex", flexDirection: "column", gap: 16 }}>
+            {agentMessages.length === 0 && !agentThinking && (
+              <div style={{ textAlign: "center", padding: "40px 0" }}>
+                <Zap size={32} style={{ color: "var(--pandora-violet-600)", margin: "0 auto 12px" }} />
+                <p style={{ fontSize: 14, fontWeight: 600, margin: "0 0 6px" }}>Pandora Ops</p>
+                <p style={{ fontSize: 13, color: "var(--pandora-ink-400)", margin: "0 0 20px", maxWidth: 480, marginLeft: "auto", marginRight: "auto" }}>
+                  Envie uma transcrição de reunião, instrução ou peça para analisar as reuniões recentes. Vou propor atualizações para o roadmap — você decide o que aplicar.
+                </p>
+                <button className="pda-btn-ghost" style={{ fontSize: 12 }} onClick={analyzeRecentMeetings} disabled={agentThinking}>
+                  <RotateCcw size={13} /> Analisar reuniões recentes
+                </button>
+              </div>
+            )}
+
+            {agentMessages.map((msg, i) => (
+              <div key={i} style={{ display: "flex", flexDirection: "column", alignItems: msg.role === "user" ? "flex-end" : "flex-start", gap: 8, maxWidth: 780, alignSelf: msg.role === "user" ? "flex-end" : "flex-start", width: "100%" }}>
+                <div style={{
+                  padding: "12px 16px", borderRadius: 12, maxWidth: "100%",
+                  background: msg.role === "user" ? "var(--pandora-violet-600)" : "var(--pandora-ink-0)",
+                  color: msg.role === "user" ? "#fff" : "inherit",
+                  border: msg.role === "assistant" ? "1px solid var(--pandora-ink-100)" : "none",
+                  fontSize: 13, lineHeight: 1.6, whiteSpace: "pre-wrap",
+                }}>
+                  {msg.content}
+                </div>
+
+                {/* proposed actions block */}
+                {msg.role === "assistant" && msg.proposed_actions && pendingActions.length > 0 && i === agentMessages.length - 1 && (
+                  <div style={{ width: "100%", border: "1.5px solid var(--pandora-violet-600)", borderRadius: 12, overflow: "hidden" }}>
+                    <div style={{ padding: "10px 14px", background: "rgba(122,28,181,0.08)", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                      <span style={{ fontSize: 12, fontWeight: 700, color: "var(--pandora-violet-400)", fontFamily: "var(--font-chakra)", letterSpacing: 1, textTransform: "uppercase" }}>
+                        {pendingActions.length} ação(ões) proposta(s)
+                      </span>
+                      <div style={{ display: "flex", gap: 8 }}>
+                        <button style={{ background: "none", border: "none", fontSize: 11, cursor: "pointer", color: "var(--pandora-ink-400)", padding: "2px 6px" }}
+                          onClick={() => setSelectedActions(new Set(pendingActions.map(a => a.id)))}>
+                          Selecionar tudo
+                        </button>
+                        <button style={{ background: "none", border: "none", fontSize: 11, cursor: "pointer", color: "var(--pandora-ink-400)", padding: "2px 6px" }}
+                          onClick={() => setSelectedActions(new Set())}>
+                          Limpar
+                        </button>
+                      </div>
+                    </div>
+
+                    <div style={{ display: "flex", flexDirection: "column", gap: 0 }}>
+                      {pendingActions.map((action, ai) => {
+                        const selected = selectedActions.has(action.id);
+                        return (
+                          <div key={action.id}
+                            onClick={() => setSelectedActions(prev => {
+                              const next = new Set(prev);
+                              if (selected) next.delete(action.id); else next.add(action.id);
+                              return next;
+                            })}
+                            style={{ display: "flex", gap: 12, padding: "12px 14px", cursor: "pointer", background: selected ? "rgba(122,28,181,0.05)" : "transparent", borderTop: ai > 0 ? "1px solid var(--pandora-ink-100)" : "none", alignItems: "flex-start" }}>
+                            <div style={{ flexShrink: 0, marginTop: 1, color: selected ? "var(--pandora-violet-600)" : "var(--pandora-ink-300)" }}>
+                              {selected ? <CheckSquare size={16} /> : <Square size={16} />}
+                            </div>
+                            <div style={{ flex: 1, minWidth: 0 }}>
+                              <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 3 }}>{action.description}</div>
+                              <div style={{ fontSize: 11, color: "var(--pandora-ink-400)", fontStyle: "italic", lineHeight: 1.4 }}>"{action.reasoning}"</div>
+                              <span style={{ fontSize: 10, fontWeight: 700, color: "var(--pandora-violet-600)", background: "rgba(122,28,181,0.1)", padding: "1px 6px", borderRadius: 20, marginTop: 4, display: "inline-block" }}>
+                                {action.type.replace(/_/g, " ")}
+                              </span>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+
+                    <div style={{ padding: "10px 14px", borderTop: "1px solid var(--pandora-ink-100)", display: "flex", gap: 8, alignItems: "center" }}>
+                      <button className="pda-btn" style={{ fontSize: 12 }}
+                        disabled={selectedActions.size === 0 || applyingActions}
+                        onClick={applySelectedActions}>
+                        {applyingActions ? <><Loader2 size={12} style={{ animation: "spin 1s linear infinite" }} /> Aplicando...</> : <><Check size={12} /> Aplicar {selectedActions.size} selecionada(s)</>}
+                      </button>
+                      <button className="pda-btn-ghost" style={{ fontSize: 12 }}
+                        onClick={() => { setPendingActions([]); setSelectedActions(new Set()); }}>
+                        Ignorar
+                      </button>
+                      {applyResult && <span style={{ fontSize: 12, color: "var(--pandora-green-400)", marginLeft: 4 }}>{applyResult}</span>}
+                    </div>
+                  </div>
+                )}
+              </div>
+            ))}
+
+            {agentThinking && (
+              <div style={{ display: "flex", alignItems: "center", gap: 8, color: "var(--pandora-ink-400)", fontSize: 13 }}>
+                <Loader2 size={14} style={{ animation: "spin 1s linear infinite" }} />
+                Pandora Ops está analisando...
+              </div>
+            )}
+            <div ref={agentBottomRef} />
+          </div>
+
+          {/* input area */}
+          <div style={{ flexShrink: 0, borderTop: "1px solid var(--pandora-ink-100)", padding: "12px 20px", display: "flex", gap: 10, alignItems: "flex-end" }}>
+            {agentMessages.length > 0 && (
+              <button className="pda-btn-ghost" style={{ fontSize: 11, padding: "6px 10px", flexShrink: 0 }} onClick={analyzeRecentMeetings} disabled={agentThinking} title="Analisar reuniões recentes">
+                <RotateCcw size={12} />
+              </button>
+            )}
+            <textarea
+              value={agentInput}
+              onChange={e => setAgentInput(e.target.value)}
+              onKeyDown={e => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); sendAgentMessage(); } }}
+              placeholder="Cole uma transcrição, envie um comando ou pressione Enter para enviar… (Shift+Enter para nova linha)"
+              rows={3}
+              style={{ flex: 1, padding: "10px 12px", borderRadius: 8, border: "1px solid var(--pandora-ink-200)", background: "var(--pandora-ink-0)", fontSize: 13, resize: "none", lineHeight: 1.5 }}
+            />
+            <button className="pda-btn" style={{ padding: "10px 14px", flexShrink: 0 }}
+              onClick={() => sendAgentMessage()} disabled={!agentInput.trim() || agentThinking}>
+              <Send size={14} />
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* ── tab: entregas ── */}
+      {activeTab === "entregas" && (
+        <div style={{ flex: 1, overflowY: "auto", padding: "24px", maxWidth: 720 }}>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 20 }}>
+            <div>
+              <h2 style={{ margin: 0, fontFamily: "var(--font-chakra)", fontSize: 18 }}>Entregas</h2>
+              <p style={{ margin: "4px 0 0", fontSize: 13, color: "var(--pandora-ink-400)" }}>
+                Entregas mensais comprometidas com o cliente
+              </p>
+            </div>
+            <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+              {/* month selector */}
+              <input type="month" value={deliverableMonth}
+                onChange={e => setDeliverableMonth(e.target.value)}
+                style={{ padding: "6px 10px", borderRadius: 6, border: "1px solid var(--pandora-ink-200)", background: "var(--pandora-ink-0)", fontSize: 13, color: "inherit" }} />
+              <button className="pda-btn-ghost" style={{ fontSize: 12 }} onClick={() => setAddingDeliv(true)}>
+                <Plus size={13} /> Entrega
+              </button>
+            </div>
+          </div>
+
+          {addingDeliv && (
+            <div className="pda-card" style={{ marginBottom: 12, display: "flex", gap: 8, alignItems: "center" }}>
+              <input autoFocus placeholder="Título da entrega..." value={newDelivTitle}
+                onChange={e => setNewDelivTitle(e.target.value)}
+                onKeyDown={e => { if (e.key === "Enter") addDeliverable(); if (e.key === "Escape") { setAddingDeliv(false); setNewDelivTitle(""); } }}
+                style={{ flex: 1, padding: "7px 10px", borderRadius: 6, border: "1px solid var(--pandora-ink-200)", background: "var(--pandora-ink-0)", fontSize: 13 }} />
+              <button className="pda-btn" style={{ fontSize: 12 }} disabled={savingDeliv || !newDelivTitle.trim()} onClick={addDeliverable}>
+                {savingDeliv ? <Loader2 size={12} style={{ animation: "spin 1s linear infinite" }} /> : <Check size={12} />}
+              </button>
+              <button className="pda-btn-ghost" style={{ fontSize: 12 }} onClick={() => { setAddingDeliv(false); setNewDelivTitle(""); }}><X size={13} /></button>
+            </div>
+          )}
+
+          {deliverables.length === 0 && !addingDeliv ? (
+            <div className="pda-empty" style={{ padding: "48px 0" }}>
+              <FileText size={32} />
+              <p>Nenhuma entrega registrada para este mês.</p>
+              <button className="pda-btn" style={{ fontSize: 12, marginTop: 8 }} onClick={() => setAddingDeliv(true)}>
+                <Plus size={13} /> Adicionar entrega
+              </button>
+            </div>
+          ) : (
+            <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+              {deliverables.map(d => (
+                <div key={d.id} className="pda-card" style={{ display: "flex", alignItems: "center", gap: 12 }}>
+                  <button onClick={() => toggleDeliverable(d.id, !d.done)}
+                    style={{ flexShrink: 0, background: "none", border: "none", cursor: "pointer", color: d.done ? "var(--pandora-green-400)" : "var(--pandora-ink-300)", padding: 2 }}>
+                    {d.done ? <CheckSquare size={18} /> : <Square size={18} />}
+                  </button>
+
+                  {editingDelivId === d.id ? (
+                    <input autoFocus value={editingDelivTitle}
+                      onChange={e => setEditingDelivTitle(e.target.value)}
+                      onBlur={() => editDeliverableTitle(d.id)}
+                      onKeyDown={e => { if (e.key === "Enter") editDeliverableTitle(d.id); if (e.key === "Escape") setEditingDelivId(null); }}
+                      style={{ flex: 1, padding: "4px 8px", borderRadius: 6, border: "1px solid var(--pandora-violet-600)", background: "var(--pandora-ink-0)", fontSize: 13 }} />
+                  ) : (
+                    <span onDoubleClick={() => { setEditingDelivId(d.id); setEditingDelivTitle(d.title); }}
+                      style={{ flex: 1, fontSize: 14, textDecoration: d.done ? "line-through" : "none", color: d.done ? "var(--pandora-ink-400)" : "inherit", cursor: "text" }}>
+                      {d.title}
+                    </span>
+                  )}
+
+                  {d.due_date && (
+                    <span style={{ fontSize: 11, color: "var(--pandora-ink-400)", flexShrink: 0 }}>
+                      <Clock size={10} style={{ verticalAlign: "middle", marginRight: 3 }} />
+                      {new Date(d.due_date).toLocaleDateString("pt-BR", { day: "2-digit", month: "short" })}
+                    </span>
+                  )}
+
+                  <button onClick={() => { setEditingDelivId(d.id); setEditingDelivTitle(d.title); }} title="Editar"
+                    style={{ flexShrink: 0, background: "none", border: "none", cursor: "pointer", color: "var(--pandora-ink-300)", padding: 3 }}>
+                    <Pencil size={12} />
+                  </button>
+                  <button onClick={() => deleteDeliverable(d.id)} title="Remover"
+                    style={{ flexShrink: 0, background: "none", border: "none", cursor: "pointer", color: "var(--pandora-ink-300)", padding: 3 }}>
+                    <X size={13} />
+                  </button>
+                </div>
+              ))}
+
+              <div style={{ marginTop: 8, fontSize: 12, color: "var(--pandora-ink-400)" }}>
+                {deliverables.filter(d => d.done).length}/{deliverables.length} concluídas
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* ── modal: colar transcrição ── */}
+      {importModal && (
+        <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.6)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 200 }}>
+          <div className="pda-card" style={{ width: 600, maxWidth: "92vw", padding: 24, maxHeight: "90vh", display: "flex", flexDirection: "column", gap: 14 }}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+              <h3 style={{ margin: 0, fontFamily: "var(--font-chakra)", fontSize: 16 }}>Colar transcrição</h3>
+              <button className="pda-btn-ghost" style={{ padding: 6 }} onClick={() => setImportModal(false)}><X size={14} /></button>
+            </div>
+
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
+              <div>
+                <label style={{ fontSize: 11, color: "var(--pandora-ink-500)", display: "block", marginBottom: 4 }}>Título (opcional)</label>
+                <input value={importForm.title} onChange={e => setImportForm(f => ({ ...f, title: e.target.value }))}
+                  placeholder="Ex: Reunião semanal Riachuelo"
+                  style={{ width: "100%", padding: "8px 10px", borderRadius: 6, border: "1px solid var(--pandora-ink-200)", background: "var(--pandora-ink-0)", fontSize: 13, boxSizing: "border-box" }} />
+              </div>
+              <div>
+                <label style={{ fontSize: 11, color: "var(--pandora-ink-500)", display: "block", marginBottom: 4 }}>Data</label>
+                <input type="date" value={importForm.occurred_at} onChange={e => setImportForm(f => ({ ...f, occurred_at: e.target.value }))}
+                  style={{ width: "100%", padding: "8px 10px", borderRadius: 6, border: "1px solid var(--pandora-ink-200)", background: "var(--pandora-ink-0)", fontSize: 13, boxSizing: "border-box", color: "inherit" }} />
+              </div>
+            </div>
+
+            <div>
+              <label style={{ fontSize: 11, color: "var(--pandora-ink-500)", display: "block", marginBottom: 4 }}>Fonte</label>
+              <select value={importForm.source} onChange={e => setImportForm(f => ({ ...f, source: e.target.value }))}
+                style={{ padding: "8px 10px", borderRadius: 6, border: "1px solid var(--pandora-ink-200)", background: "var(--pandora-ink-0)", fontSize: 13, color: "inherit" }}>
+                <option value="teams">Microsoft Teams</option>
+                <option value="discord">Discord</option>
+                <option value="whatsapp">WhatsApp</option>
+                <option value="zoom">Zoom</option>
+                <option value="manual">Anotação manual</option>
+                <option value="outro">Outro</option>
+              </select>
+            </div>
+
+            <div style={{ flex: 1 }}>
+              <label style={{ fontSize: 11, color: "var(--pandora-ink-500)", display: "block", marginBottom: 4 }}>Transcrição / Conteúdo *</label>
+              <textarea value={importForm.content} onChange={e => setImportForm(f => ({ ...f, content: e.target.value }))}
+                placeholder="Cole aqui a transcrição da reunião, conversa ou anotações..."
+                rows={12}
+                style={{ width: "100%", padding: "10px 12px", borderRadius: 6, border: "1px solid var(--pandora-ink-200)", background: "var(--pandora-ink-0)", fontSize: 13, resize: "vertical", lineHeight: 1.5, boxSizing: "border-box" }} />
+            </div>
+
+            <div style={{ display: "flex", gap: 8, justifyContent: "flex-end" }}>
+              <button className="pda-btn-ghost" style={{ fontSize: 12 }} onClick={() => setImportModal(false)}>Cancelar</button>
+              <button className="pda-btn" style={{ fontSize: 12 }} disabled={!importForm.content.trim() || importing} onClick={importTranscript}>
+                {importing ? <><Loader2 size={12} style={{ animation: "spin 1s linear infinite" }} /> Salvando...</> : <><Check size={12} /> Salvar</>}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

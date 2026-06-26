@@ -21,7 +21,7 @@ export default function TaskBell() {
   async function load() {
     setLoading(true);
     try {
-      const res = await fetch("/api/tasks?status=open&limit=5");
+      const res = await fetch("/api/tasks?status=active&limit=5");
       if (res.ok) setTasks(await res.json());
     } finally {
       setLoading(false);
@@ -121,8 +121,16 @@ export default function TaskBell() {
                 background: PRIORITY_COLOR[task.priority] ?? "#9ca3af",
                 marginTop: 5, flexShrink: 0,
               }} />
-              <span style={{ flex: 1, fontSize: 12, color: "var(--pandora-ink-700)", lineHeight: 1.4 }}>
-                {task.title}
+              <span style={{ flex: 1, display: "flex", flexDirection: "column", gap: 2, minWidth: 0 }}>
+                <span style={{ fontSize: 12, color: "var(--pandora-ink-700)", lineHeight: 1.4 }}>
+                  {task.title}
+                </span>
+                {task.context && (
+                  <span style={{ fontSize: 10, color: "var(--pandora-ink-400)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                    <span style={{ fontFamily: "var(--font-display)", textTransform: "uppercase", letterSpacing: "0.05em" }}>{task.context.label}</span>
+                    {" · "}{task.context.name}
+                  </span>
+                )}
               </span>
               <div style={{ display: "flex", gap: 2, flexShrink: 0 }}>
                 <button onClick={() => updateTask(task.id, "done")}

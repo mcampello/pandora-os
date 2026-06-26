@@ -122,6 +122,13 @@ function OportunidadesPageInner() {
   }, [load]);
 
   useEffect(() => {
+    fetch("/api/companies")
+      .then((res) => (res.ok ? res.json() : []))
+      .then((data) => setCompaniesList(data as { id: string; name: string }[]))
+      .catch(() => setCompaniesList([]));
+  }, []);
+
+  useEffect(() => {
     if (!contactIdParam) {
       setContactFilterName(null);
       return;
@@ -289,6 +296,7 @@ function OportunidadesPageInner() {
       value: form.value.trim() ? parseFloat(form.value) : null,
       contract_model: form.contract_model.trim() || null,
       company: form.company.trim() || null,
+      company_id: form.company_id || null,
     };
 
     const res = editing
@@ -476,9 +484,14 @@ function OportunidadesPageInner() {
       </div>
 
       {drawerOpen && (
-        <>
-          <div className="pda-drawer-backdrop" onClick={() => setDrawerOpen(false)} aria-hidden />
-          <aside className="pda-drawer" role="dialog" aria-label={editing ? "Editar oportunidade" : "Nova oportunidade"}>
+        <div className="pda-modal-backdrop" onClick={() => setDrawerOpen(false)}>
+          <aside
+            className="pda-modal"
+            role="dialog"
+            aria-modal="true"
+            aria-label={editing ? "Editar oportunidade" : "Nova oportunidade"}
+            onClick={(e) => e.stopPropagation()}
+          >
             <div className="pda-drawer-head">
               <span className="pda-eyebrow">{editing ? "Editar oportunidade" : "Nova oportunidade"}</span>
               <button type="button" className="pda-collapse-btn" onClick={() => setDrawerOpen(false)} aria-label="Fechar">
@@ -670,7 +683,7 @@ function OportunidadesPageInner() {
               </div>
             </div>
           </aside>
-        </>
+        </div>
       )}
 
       {confirmOperacional && (

@@ -67,6 +67,7 @@ export async function POST(req: NextRequest) {
     value: value != null ? parseFloat(value) : null,
     contract_model: contract_model || null,
     company: company || null,
+    company_id,
     detected_at: new Date().toISOString(),
   };
   if (oppStatus === "em_contato") {

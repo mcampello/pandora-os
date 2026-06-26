@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { supabaseServer } from "@/lib/supabase-server";
+import { supabasePublic } from "@/lib/supabase-admin";
 import { aiJson } from "@/lib/ai";
 
 interface IntelResponse {
@@ -43,7 +44,7 @@ export async function POST(_req: NextRequest, { params }: { params: Promise<{ id
 
   if (contact.phone) {
     const phoneDigits = contact.phone.replace(/\D/g, "");
-    const query = supabase
+    const query = supabasePublic()
       .from("documents")
       .select("id, content, metadata")
       .filter("metadata->>chatId", "ilike", `%${phoneDigits}%`)

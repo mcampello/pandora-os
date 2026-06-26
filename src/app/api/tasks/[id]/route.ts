@@ -9,7 +9,7 @@ export async function PATCH(
   const { id } = await params;
   const body = await req.json();
 
-  const allowed = ["status", "priority", "due_at", "title"] as const;
+  const allowed = ["status", "priority", "due_at", "title", "description"] as const;
   const update: Record<string, unknown> = {};
 
   for (const key of allowed) {
@@ -18,6 +18,11 @@ export async function PATCH(
 
   if (body.status === "done")      update.done_at = new Date().toISOString();
   if (body.status === "dismissed") update.dismissed_at = new Date().toISOString();
+  // Reabrir / mover para andamento: limpa os timestamps de resolução
+  if (body.status === "open" || body.status === "in_progress") {
+    update.done_at = null;
+    update.dismissed_at = null;
+  }
 
   if (Object.keys(update).length === 0) {
     return NextResponse.json({ error: "Nenhum campo para atualizar" }, { status: 400 });

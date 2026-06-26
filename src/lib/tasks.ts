@@ -2,13 +2,37 @@
 type AnySupabaseClient = import("@supabase/supabase-js").SupabaseClient<any, any, any>;
 
 export type TaskPriority = "critical" | "high" | "medium" | "low";
-export type TaskStatus   = "open" | "done" | "dismissed";
+export type TaskStatus   = "open" | "in_progress" | "done" | "dismissed";
+
+// Estados "ativos" (não resolvidos) — usados em filtros e dedup.
+export const ACTIVE_TASK_STATUSES: TaskStatus[] = ["open", "in_progress"];
 export type TaskSource   = "manual" | "rule" | "ai";
 export type TaskEntityType = "contact" | "client" | "opportunity" | "proposal" | "deliverable";
+
+// Contexto unificado da tarefa — resolvido no servidor a partir de entity_type/entity_id.
+// Traduz a entidade crua (contact/client/...) para o conceito de negócio:
+// prospect, oportunidade ou contrato ativo.
+export type TaskContextKind =
+  | "prospect"
+  | "opportunity"
+  | "contract"
+  | "client"
+  | "proposal"
+  | "deliverable"
+  | "contact";
+
+export interface TaskContext {
+  kind: TaskContextKind;
+  label: string;          // rótulo de negócio: "Prospect", "Oportunidade", "Contrato ativo"…
+  name: string;           // nome da empresa/contato/oportunidade
+  status?: string | null; // status cru da entidade (ex.: client.status, opportunity.status)
+  href: string;           // link para a entidade
+}
 
 export interface Task {
   id: string;
   title: string;
+  description?: string | null;
   status: TaskStatus;
   priority: TaskPriority;
   source: TaskSource;
@@ -23,6 +47,8 @@ export interface Task {
   metadata: Record<string, unknown>;
   created_at: string;
   updated_at: string;
+  // Preenchido por enrichTasksWithContext (lib/task-context.ts) na camada de API.
+  context?: TaskContext | null;
 }
 
 export interface TaskRule {
@@ -40,6 +66,7 @@ export interface TaskRule {
 
 export interface TaskInsert {
   title: string;
+  description?: string;
   priority: TaskPriority;
   source: TaskSource;
   dedup_key: string;
@@ -91,7 +118,7 @@ export async function taskExists(
     .from("tasks")
     .select("id", { count: "exact", head: true })
     .eq("dedup_key", dedup_key)
-    .eq("status", "open");
+    .in("status", ACTIVE_TASK_STATUSES);
   return (count ?? 0) > 0;
 }
 

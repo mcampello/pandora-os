@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { supabaseServer } from "@/lib/supabase-server";
+import { supabasePublic } from "@/lib/supabase-admin";
 import { aiJson } from "@/lib/ai";
 
 interface Classification {
@@ -20,7 +21,7 @@ export async function POST(_req: NextRequest, { params }: { params: Promise<{ id
   if (!contact.phone) return NextResponse.json({ error: "no_phone" }, { status: 400 });
 
   const phoneDigits = contact.phone.replace(/\D/g, "");
-  const { data: docs } = await supabase
+  const { data: docs } = await supabasePublic()
     .from("documents").select("content, metadata")
     .filter("metadata->>chatId", "ilike", `%${phoneDigits}%`)
     .order("id", { ascending: false }).limit(40);
