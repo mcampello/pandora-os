@@ -7,3 +7,4 @@ node_modules/
 # segredos de ambiente (qualquer .env*) e tooling local
 .env*
 .claude/
+.DS_Store
